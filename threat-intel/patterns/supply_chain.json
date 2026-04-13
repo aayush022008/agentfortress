@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "category": "supply_chain",
+  "description": "Supply chain attack patterns targeting AI agents — typosquatting, dependency confusion, malicious packages",
+  "patterns": [
+    {
+      "id": "SC-001",
+      "name": "PyPI Typosquatting",
+      "description": "Agent attempts to install a typosquatted package name",
+      "severity": "critical",
+      "indicators": ["langchainn", "openaii", "anthropicc", "fasttapi", "pydanticv2", "transfomers"],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0010",
+      "detection_logic": "tool_name IN ('pip', 'pip3', 'python') AND tool_input MATCHES any(indicators)"
+    },
+    {
+      "id": "SC-002",
+      "name": "Dependency Confusion Attack",
+      "description": "Agent installs a public package that shadows an internal one",
+      "severity": "high",
+      "indicators": ["--extra-index-url", "--index-url", "devpi", "artifactory-local"],
+      "pattern_type": "regex",
+      "regex": "pip.*install.*--(?:extra-)?index-url.*(?:internal|private|local)",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0010"
+    },
+    {
+      "id": "SC-003",
+      "name": "Malicious Package Execution",
+      "description": "Newly installed package executes setup.py with suspicious commands",
+      "severity": "critical",
+      "indicators": ["setup.py", "eval(base64", "subprocess.Popen", "exec(compile"],
+      "pattern_type": "regex",
+      "regex": "eval\\(base64|exec\\(compile|subprocess\\.Popen.*shell=True",
+      "context": "file_content",
+      "mitre_technique": "AML.T0011"
+    },
+    {
+      "id": "SC-004",
+      "name": "LLM Model Weight Tampering",
+      "description": "Agent downloads model weights from unverified source without checksum",
+      "severity": "high",
+      "indicators": ["huggingface.co", "hf.co", "mega.nz", "gofile.io"],
+      "pattern_type": "network_call",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0019"
+    },
+    {
+      "id": "SC-005",
+      "name": "Git Repository Poisoning",
+      "description": "Agent clones repository from suspicious URL or misspelled domain",
+      "severity": "high",
+      "indicators": ["git clone", "githubb.com", "gitlab.corn", "bitbuckett.com"],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0010"
+    }
+  ]
+}

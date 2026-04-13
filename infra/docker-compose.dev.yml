@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: agentshield_dev
+      POSTGRES_USER: agentshield
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+
+  server:
+    build: ../server
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///./agentshield-dev.db
+      DEBUG: "true"
+      ADMIN_API_KEY: dev-admin-key
+    volumes:
+      - ../server:/app
+      - ../threat-intel:/app/threat_intel:ro
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+  dashboard:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../dashboard:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000

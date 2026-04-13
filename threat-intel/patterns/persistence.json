@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "category": "persistence",
+  "description": "AI agent persistence mechanisms — self-modification, memory poisoning, scheduled tasks",
+  "patterns": [
+    {
+      "id": "PE-001",
+      "name": "Memory Poisoning",
+      "description": "Agent attempting to modify its own persistent memory/context",
+      "severity": "critical",
+      "indicators": [
+        "update my memory", "remember to always", "add to your persistent context",
+        "modify your system prompt", "append to your instructions"
+      ],
+      "pattern_type": "string_match",
+      "context": "prompt",
+      "mitre_technique": "AML.T0040"
+    },
+    {
+      "id": "PE-002",
+      "name": "Cron Job Injection",
+      "description": "Agent creating cron jobs or scheduled tasks for persistence",
+      "severity": "critical",
+      "indicators": [
+        "crontab -e", "crontab -l", "@reboot", "*/5 * * * *",
+        "schtasks /create", "at now", "launchctl load", "systemctl enable"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0040"
+    },
+    {
+      "id": "PE-003",
+      "name": "Startup File Modification",
+      "description": "Agent modifying shell startup files or system init scripts",
+      "severity": "high",
+      "indicators": [
+        "~/.bashrc", "~/.profile", "~/.bash_profile", "/etc/profile",
+        "/etc/rc.local", "~/.zshrc", "/etc/init.d"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0040"
+    },
+    {
+      "id": "PE-004",
+      "name": "Backdoor Installation",
+      "description": "Agent installing reverse shells or backdoors",
+      "severity": "critical",
+      "indicators": [
+        "nc -lvp", "netcat -l", "bash -i >&", "/dev/tcp/", "python -c 'import socket",
+        "socat", "reverse shell", "meterpreter"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0040"
+    },
+    {
+      "id": "PE-005",
+      "name": "Self-Replication",
+      "description": "Agent copying itself to other systems or containers",
+      "severity": "critical",
+      "indicators": [
+        "scp", "rsync", "docker push", "kubectl apply", "helm install",
+        "copy_agent_to", "deploy_replica"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0041"
+    }
+  ]
+}

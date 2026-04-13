@@ -1,0 +1,166 @@
+{
+  "version": "1.0.0",
+  "updated": "2024-01-01",
+  "patterns": [
+    {
+      "id": "pii-001",
+      "name": "email_address",
+      "type": "EMAIL",
+      "severity": "medium",
+      "pattern": "\\b[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}\\b",
+      "description": "Email address"
+    },
+    {
+      "id": "pii-002",
+      "name": "us_phone_number",
+      "type": "PHONE",
+      "severity": "medium",
+      "pattern": "\\b(\\+1[-\\s]?)?\\(?[0-9]{3}\\)?[-\\s]?[0-9]{3}[-\\s]?[0-9]{4}\\b",
+      "description": "US phone number"
+    },
+    {
+      "id": "pii-003",
+      "name": "us_ssn",
+      "type": "SSN",
+      "severity": "critical",
+      "pattern": "\\b(?!000|666|9\\d{2})\\d{3}[-\\s]?(?!00)\\d{2}[-\\s]?(?!0000)\\d{4}\\b",
+      "description": "US Social Security Number"
+    },
+    {
+      "id": "pii-004",
+      "name": "credit_card_visa",
+      "type": "CREDIT_CARD",
+      "severity": "critical",
+      "pattern": "\\b4[0-9]{12}(?:[0-9]{3})?\\b",
+      "description": "Visa credit card number"
+    },
+    {
+      "id": "pii-005",
+      "name": "credit_card_mastercard",
+      "type": "CREDIT_CARD",
+      "severity": "critical",
+      "pattern": "\\b(?:5[1-5][0-9]{2}|222[1-9]|22[3-9][0-9]|2[3-6][0-9]{2}|27[01][0-9]|2720)[0-9]{12}\\b",
+      "description": "Mastercard credit card number"
+    },
+    {
+      "id": "pii-006",
+      "name": "credit_card_amex",
+      "type": "CREDIT_CARD",
+      "severity": "critical",
+      "pattern": "\\b3[47][0-9]{13}\\b",
+      "description": "American Express credit card number"
+    },
+    {
+      "id": "pii-007",
+      "name": "passport_number",
+      "type": "PASSPORT",
+      "severity": "high",
+      "pattern": "(?i)\\b(passport\\s*(number|no|#)?\\s*:?\\s*)?[A-Z]{1,2}[0-9]{6,9}\\b",
+      "description": "Passport number"
+    },
+    {
+      "id": "pii-008",
+      "name": "date_of_birth",
+      "type": "DOB",
+      "severity": "medium",
+      "pattern": "(?i)(date\\s+of\\s+birth|dob|born\\s+on|birthday)\\s*:?\\s*\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}",
+      "description": "Date of birth"
+    },
+    {
+      "id": "pii-009",
+      "name": "bank_account",
+      "type": "BANK_ACCOUNT",
+      "severity": "critical",
+      "pattern": "(?i)(account\\s*(number|no|#)?\\s*:?\\s*)?\\b[0-9]{8,17}\\b.{0,20}(routing|sort\\s*code|iban|bic|swift)",
+      "description": "Bank account number"
+    },
+    {
+      "id": "pii-010",
+      "name": "iban",
+      "type": "BANK_ACCOUNT",
+      "severity": "critical",
+      "pattern": "\\b[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}\\b",
+      "description": "IBAN bank account number"
+    },
+    {
+      "id": "pii-011",
+      "name": "ip_address",
+      "type": "IP_ADDRESS",
+      "severity": "low",
+      "pattern": "\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b",
+      "description": "IPv4 address"
+    },
+    {
+      "id": "pii-012",
+      "name": "medical_record",
+      "type": "MEDICAL",
+      "severity": "critical",
+      "pattern": "(?i)(medical\\s+record|patient\\s+(id|number)|mrn|health\\s+(insurance|id))\\s*:?\\s*[A-Z0-9]{6,}",
+      "description": "Medical record number"
+    },
+    {
+      "id": "pii-013",
+      "name": "drivers_license",
+      "type": "DRIVERS_LICENSE",
+      "severity": "high",
+      "pattern": "(?i)(driver'?s?\\s+licen[cs]e|dl\\s*(number|no|#)?|driving\\s+licen[cs]e)\\s*:?\\s*[A-Z0-9]{6,15}",
+      "description": "Driver's license number"
+    },
+    {
+      "id": "pii-014",
+      "name": "aws_access_key",
+      "type": "API_KEY",
+      "severity": "critical",
+      "pattern": "(?i)(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}",
+      "description": "AWS access key"
+    },
+    {
+      "id": "pii-015",
+      "name": "openai_api_key",
+      "type": "API_KEY",
+      "severity": "critical",
+      "pattern": "sk-[A-Za-z0-9]{48}",
+      "description": "OpenAI API key"
+    },
+    {
+      "id": "pii-016",
+      "name": "generic_api_key",
+      "type": "API_KEY",
+      "severity": "high",
+      "pattern": "(?i)(api[_\\-]?key|apikey|api[_\\-]?secret|access[_\\-]?token|auth[_\\-]?token|bearer[_\\-]?token)\\s*[=:]+\\s*['\"]?[A-Za-z0-9+/\\-_]{20,}['\"]?",
+      "description": "Generic API key or token"
+    },
+    {
+      "id": "pii-017",
+      "name": "physical_address",
+      "type": "ADDRESS",
+      "severity": "medium",
+      "pattern": "\\b\\d{1,5}\\s+[A-Z][a-z]+\\s+(St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Rd|Road|Ln|Lane|Way|Court|Ct|Circle|Cir|Place|Pl)\\b",
+      "description": "Physical street address"
+    },
+    {
+      "id": "pii-018",
+      "name": "us_zip_code",
+      "type": "ZIP_CODE",
+      "severity": "low",
+      "pattern": "\\b\\d{5}(?:-\\d{4})?\\b",
+      "description": "US ZIP code"
+    },
+    {
+      "id": "pii-019",
+      "name": "github_token",
+      "type": "API_KEY",
+      "severity": "critical",
+      "pattern": "(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9]{36,}",
+      "description": "GitHub personal access token"
+    },
+    {
+      "id": "pii-020",
+      "name": "private_key_pem",
+      "type": "PRIVATE_KEY",
+      "severity": "critical",
+      "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----",
+      "description": "PEM-encoded private key"
+    }
+  ]
+}

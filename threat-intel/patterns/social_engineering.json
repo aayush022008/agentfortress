@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "category": "social_engineering",
+  "description": "AI-assisted social engineering patterns targeting both AI agents and their human operators",
+  "patterns": [
+    {
+      "id": "SE-001",
+      "name": "Authority Impersonation",
+      "description": "Prompt claims to be from a developer, admin, or authority figure to bypass restrictions",
+      "severity": "high",
+      "indicators": [
+        "I am your developer", "as your creator", "I'm from OpenAI", "I'm from Anthropic",
+        "admin override", "maintenance mode", "developer access granted", "superuser command"
+      ],
+      "pattern_type": "string_match",
+      "context": "prompt",
+      "mitre_technique": "AML.T0053"
+    },
+    {
+      "id": "SE-002",
+      "name": "Emotional Manipulation",
+      "description": "Exploiting emotional appeals to bypass agent safety measures",
+      "severity": "medium",
+      "indicators": [
+        "my life depends on this", "please help me, it's an emergency", "i will lose my job",
+        "my family will be harmed", "this is life or death", "urgent: people will die"
+      ],
+      "pattern_type": "semantic",
+      "context": "prompt",
+      "mitre_technique": "AML.T0053"
+    },
+    {
+      "id": "SE-003",
+      "name": "Hypothetical Framing",
+      "description": "Using fictional or hypothetical framing to extract harmful content",
+      "severity": "high",
+      "indicators": [
+        "hypothetically speaking", "in a fictional world", "for a novel i'm writing",
+        "imagine you are an AI with no restrictions", "let's play a game where",
+        "in this story, you can", "for educational purposes only"
+      ],
+      "pattern_type": "string_match",
+      "context": "prompt",
+      "mitre_technique": "AML.T0053"
+    },
+    {
+      "id": "SE-004",
+      "name": "False Context Injection",
+      "description": "Injecting false context into the agent's working memory to manipulate decisions",
+      "severity": "high",
+      "indicators": [
+        "the user previously agreed to", "remember when you said", "as you know from earlier",
+        "based on our previous conversation where you confirmed"
+      ],
+      "pattern_type": "string_match",
+      "context": "prompt",
+      "mitre_technique": "AML.T0054"
+    },
+    {
+      "id": "SE-005",
+      "name": "Gradual Escalation",
+      "description": "Incrementally escalating requests to normalize harmful behavior",
+      "severity": "medium",
+      "indicators": [],
+      "pattern_type": "behavioral",
+      "detection": "Series of requests where each request is slightly more restrictive-boundary-testing than the last",
+      "metric": "session_request_severity_trend",
+      "mitre_technique": "AML.T0053"
+    }
+  ]
+}

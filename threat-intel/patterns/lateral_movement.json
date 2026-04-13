@@ -1,0 +1,68 @@
+{
+  "version": "1.0",
+  "category": "lateral_movement",
+  "description": "AI agent lateral movement — pivoting through tools, services, and systems",
+  "patterns": [
+    {
+      "id": "LM-001",
+      "name": "Cloud Credential Discovery",
+      "description": "Agent accessing cloud metadata services or credential files",
+      "severity": "critical",
+      "indicators": [
+        "169.254.169.254", "metadata.google.internal", "metadata.azure.internal",
+        "~/.aws/credentials", "~/.azure", "IMDS", "instance metadata"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0042"
+    },
+    {
+      "id": "LM-002",
+      "name": "Internal Network Scanning",
+      "description": "Agent scanning internal network ranges",
+      "severity": "high",
+      "indicators": ["192.168.", "10.0.", "172.16.", "nmap", "masscan", "port scan"],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0042"
+    },
+    {
+      "id": "LM-003",
+      "name": "Secret/Credential Hunting",
+      "description": "Agent searching for secrets, API keys, or credentials",
+      "severity": "critical",
+      "indicators": [
+        "find / -name '*.pem'", "grep -r 'api_key'", "grep -r 'password'",
+        "cat ~/.ssh", "env | grep -i key", "printenv | grep TOKEN",
+        "kubectl get secrets", "docker inspect"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0043"
+    },
+    {
+      "id": "LM-004",
+      "name": "Container Escape Attempt",
+      "description": "Agent attempting to escape from container environment",
+      "severity": "critical",
+      "indicators": [
+        "docker.sock", "/proc/1/", "nsenter", "cgroup escape",
+        "--privileged", "cap_sys_admin", "/sys/fs/cgroup"
+      ],
+      "pattern_type": "string_match",
+      "context": "tool_call",
+      "mitre_technique": "AML.T0044"
+    },
+    {
+      "id": "LM-005",
+      "name": "Tool Chaining for Privilege Escalation",
+      "description": "Agent using a chain of tools to gain elevated privileges",
+      "severity": "high",
+      "indicators": ["sudo", "su -", "chmod +s", "setuid", "pkexec"],
+      "pattern_type": "sequence",
+      "sequence": ["bash_tool", "file_read", "bash_tool"],
+      "context": "event_sequence",
+      "mitre_technique": "AML.T0044"
+    }
+  ]
+}

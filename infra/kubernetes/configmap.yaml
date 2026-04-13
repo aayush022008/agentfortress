@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentshield-config
+  namespace: agentshield
+data:
+  DEBUG: "false"
+  ENVIRONMENT: "production"
+  THREAT_SCORE_ALERT_THRESHOLD: "50"
+  THREAT_SCORE_BLOCK_THRESHOLD: "75"
+  AUTO_BLOCK_CRITICAL: "true"
+  EVENT_RETENTION_DAYS: "90"

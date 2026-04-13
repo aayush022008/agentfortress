@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentshield-server-pdb
+  namespace: agentshield
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agentshield-server
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentshield-postgres-pdb
+  namespace: agentshield
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agentshield-postgres

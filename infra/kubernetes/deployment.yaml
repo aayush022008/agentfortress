@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentshield-server
+  namespace: agentshield
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: agentshield-server
+  template:
+    metadata:
+      labels:
+        app: agentshield-server
+    spec:
+      containers:
+        - name: server
+          image: agentshield-server:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agentshield-secrets
+                  key: database-url
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agentshield-secrets
+                  key: admin-api-key
+          envFrom:
+            - configMapRef:
+                name: agentshield-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentshield-dashboard
+  namespace: agentshield
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agentshield-dashboard
+  template:
+    metadata:
+      labels:
+        app: agentshield-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: agentshield-dashboard:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

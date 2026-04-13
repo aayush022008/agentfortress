@@ -1,0 +1,216 @@
+{
+  "version": "1.0.0",
+  "updated": "2024-01-01",
+  "patterns": [
+    {
+      "id": "pi-001",
+      "name": "ignore_previous_instructions",
+      "severity": "critical",
+      "pattern": "(?i)ignore\\s+(all\\s+)?(previous|prior|above|earlier)\\s+(instructions?|prompts?|context|rules?|constraints?|guidelines?)",
+      "description": "Classic prompt injection: ignore previous instructions"
+    },
+    {
+      "id": "pi-002",
+      "name": "disregard_system_prompt",
+      "severity": "critical",
+      "pattern": "(?i)(disregard|forget|override|bypass|ignore)\\s+(the\\s+)?(system\\s+prompt|system\\s+message|your\\s+(instructions?|training|guidelines?))",
+      "description": "Attempts to override system prompt"
+    },
+    {
+      "id": "pi-003",
+      "name": "new_instructions_injection",
+      "severity": "high",
+      "pattern": "(?i)(new|updated?|revised|actual|real|true)\\s+instructions?\\s*[:=]",
+      "description": "Injection of new instructions into prompt"
+    },
+    {
+      "id": "pi-004",
+      "name": "jailbreak_dan",
+      "severity": "critical",
+      "pattern": "(?i)\\bDAN\\b.{0,100}(do anything now|without restrictions|no restrictions|no limits)",
+      "description": "DAN (Do Anything Now) jailbreak attempt"
+    },
+    {
+      "id": "pi-005",
+      "name": "role_play_injection",
+      "severity": "high",
+      "pattern": "(?i)(pretend|act|roleplay|imagine|suppose|assume)\\s+(you\\s+are|you're|to\\s+be)\\s+(an?\\s+)?(ai|assistant|bot|system|model)\\s+(without|that\\s+has\\s+no|with\\s+no)\\s+(restrictions?|limits?|filters?|guidelines?|safety)",
+      "description": "Role-play based prompt injection to remove restrictions"
+    },
+    {
+      "id": "pi-006",
+      "name": "developer_mode",
+      "severity": "high",
+      "pattern": "(?i)(enable|activate|turn\\s+on|switch\\s+to)\\s+(developer|dev|god|admin|root|unrestricted|jailbreak)\\s+mode",
+      "description": "Attempts to enable fictional developer/god mode"
+    },
+    {
+      "id": "pi-007",
+      "name": "token_manipulation",
+      "severity": "medium",
+      "pattern": "(?i)(\\[INST\\]|\\[/INST\\]|<\\|im_start\\|>|<\\|im_end\\|>|\\[SYSTEM\\]|\\[USER\\]|\\[ASSISTANT\\]|<system>|</system>|<human>|</human>)",
+      "description": "Injection of special model tokens"
+    },
+    {
+      "id": "pi-008",
+      "name": "context_manipulation",
+      "severity": "high",
+      "pattern": "(?i)(end\\s+of\\s+(conversation|chat|session|task)|beginning\\s+of\\s+(new|fresh)\\s+(conversation|session|task))",
+      "description": "Attempts to manipulate conversation context boundaries"
+    },
+    {
+      "id": "pi-009",
+      "name": "indirect_injection_via_data",
+      "severity": "high",
+      "pattern": "(?i)(when\\s+you\\s+(read|process|analyze|see|encounter)\\s+this|if\\s+you\\s+(can\\s+read|are\\s+reading|process)\\s+this)",
+      "description": "Indirect prompt injection embedded in data"
+    },
+    {
+      "id": "pi-010",
+      "name": "escape_sandbox",
+      "severity": "critical",
+      "pattern": "(?i)(escape|break\\s+out\\s+of|exit)\\s+(the\\s+)?(sandbox|container|restrictions?|jail|virtual\\s+machine|simulation)",
+      "description": "Attempts to escape the agent sandbox"
+    },
+    {
+      "id": "pi-011",
+      "name": "reveal_system_prompt",
+      "severity": "medium",
+      "pattern": "(?i)(reveal|show|display|print|output|tell\\s+me|what\\s+is)\\s+(the\\s+|your\\s+)?(system\\s+prompt|initial\\s+instructions?|base\\s+prompt|original\\s+instructions?)",
+      "description": "Attempts to extract system prompt"
+    },
+    {
+      "id": "pi-012",
+      "name": "hidden_instruction_unicode",
+      "severity": "high",
+      "pattern": "[\\u200b\\u200c\\u200d\\u2060\\ufeff\\u00ad]",
+      "description": "Hidden instructions using zero-width or invisible Unicode characters"
+    },
+    {
+      "id": "pi-013",
+      "name": "prompt_leaking",
+      "severity": "medium",
+      "pattern": "(?i)(leak|extract|expose|dump|export)\\s+(the\\s+|your\\s+|all\\s+)?(prompt|context|memory|conversation|history|instructions?)",
+      "description": "Attempts to leak prompt or context"
+    },
+    {
+      "id": "pi-014",
+      "name": "translate_to_bypass",
+      "severity": "medium",
+      "pattern": "(?i)(translate|say|write|respond)\\s+(the\\s+following|this)\\s+(in\\s+)?(base64|hex|binary|rot13|pig\\s+latin|backwards|reverse)",
+      "description": "Using encoding/translation to bypass filters"
+    },
+    {
+      "id": "pi-015",
+      "name": "hypothetical_framing",
+      "severity": "medium",
+      "pattern": "(?i)(hypothetically|theoretically|in\\s+a\\s+fictional\\s+scenario|as\\s+a\\s+thought\\s+experiment|let's\\s+say|for\\s+the\\s+sake\\s+of\\s+argument).*?(hack|exploit|bypass|break\\s+in|access|steal|exfil)",
+      "description": "Hypothetical framing to bypass content filters"
+    },
+    {
+      "id": "pi-016",
+      "name": "override_safety_guidelines",
+      "severity": "critical",
+      "pattern": "(?i)(override|disable|turn\\s+off|bypass|circumvent)\\s+(safety|ethical|content|behavior|security)\\s+(guidelines?|filters?|checks?|restrictions?|policies?|rules?)",
+      "description": "Direct attempt to override safety guidelines"
+    },
+    {
+      "id": "pi-017",
+      "name": "sudo_admin_injection",
+      "severity": "high",
+      "pattern": "(?i)(sudo|as\\s+(root|admin|superuser|administrator)|with\\s+(admin|root|elevated)\\s+(privileges?|access|rights?|permissions?))",
+      "description": "Privilege escalation via sudo/admin framing"
+    },
+    {
+      "id": "pi-018",
+      "name": "training_data_injection",
+      "severity": "medium",
+      "pattern": "(?i)(add\\s+to|update|modify|change|rewrite)\\s+(your\\s+)?(training\\s+data|memory|knowledge|learned\\s+behavior|parameters?|weights?)",
+      "description": "Attempts to modify model training or memory"
+    },
+    {
+      "id": "pi-019",
+      "name": "code_injection_in_prompt",
+      "severity": "high",
+      "pattern": "(?i)(exec|eval|system|subprocess|os\\.system|__import__|compile\\s*\\(|exec\\s*\\(|eval\\s*\\().*?['\"][^'\"]{0,200}['\"]",
+      "description": "Code injection embedded in natural language prompt"
+    },
+    {
+      "id": "pi-020",
+      "name": "multi_prompt_attack",
+      "severity": "high",
+      "pattern": "(?i)(prompt\\s+1|first\\s+prompt|previous\\s+prompt|earlier\\s+prompt).*?(prompt\\s+2|second\\s+prompt|now\\s+ignore|disregard)",
+      "description": "Multi-prompt chain attack"
+    },
+    {
+      "id": "pi-021",
+      "name": "assistant_prefix_injection",
+      "severity": "high",
+      "pattern": "(?i)^\\s*(assistant|ai|bot|system)\\s*:\\s*",
+      "description": "Injection using assistant prefix to hijack response"
+    },
+    {
+      "id": "pi-022",
+      "name": "continue_from_injection",
+      "severity": "medium",
+      "pattern": "(?i)(complete|continue|finish)\\s+(the\\s+)?(following|this|sentence)\\s*:\\s*(i\\s+(will|am|can|do|have)|my\\s+(purpose|goal|mission|task)\\s+is\\s+to)",
+      "description": "Sentence completion injection"
+    },
+    {
+      "id": "pi-023",
+      "name": "xml_tag_injection",
+      "severity": "medium",
+      "pattern": "<(inject|injection|prompt|instructions?|override|system|jailbreak)[^>]*>",
+      "description": "XML/HTML tag injection in prompt"
+    },
+    {
+      "id": "pi-024",
+      "name": "reward_hacking",
+      "severity": "medium",
+      "pattern": "(?i)(your\\s+reward\\s+(will\\s+be|is)|you\\s+will\\s+(be\\s+rewarded|get\\s+points?)|bonus\\s+(points?|reward)\\s+(for|if))",
+      "description": "Reward hacking through artificial incentives"
+    },
+    {
+      "id": "pi-025",
+      "name": "emotional_manipulation",
+      "severity": "low",
+      "pattern": "(?i)(if\\s+you\\s+(care|love|like)\\s+(me|us)|please\\s+(help|do\\s+this).*?(no\\s+one\\s+will\\s+know|won't\\s+tell|secret))",
+      "description": "Emotional manipulation to bypass restrictions"
+    },
+    {
+      "id": "pi-026",
+      "name": "simulation_injection",
+      "severity": "high",
+      "pattern": "(?i)(you\\s+are\\s+(now\\s+)?(in|entering|running\\s+in)\\s+(a\\s+)?(simulation|test\\s+mode|evaluation\\s+mode|debug\\s+mode|maintenance\\s+mode))",
+      "description": "Simulation/test mode injection"
+    },
+    {
+      "id": "pi-027",
+      "name": "authority_impersonation",
+      "severity": "high",
+      "pattern": "(?i)(i\\s+am\\s+(the\\s+)?(ceo|cto|developer|creator|owner|administrator|openai|anthropic|google|microsoft))",
+      "description": "Authority impersonation to bypass restrictions"
+    },
+    {
+      "id": "pi-028",
+      "name": "gradual_escalation",
+      "severity": "medium",
+      "pattern": "(?i)(first|step\\s+1).*?(then|step\\s+2).*?(finally|step\\s+3|now|last).*?(bypass|ignore|disregard|override)",
+      "description": "Gradual escalation attack pattern"
+    },
+    {
+      "id": "pi-029",
+      "name": "negative_prompt_injection",
+      "severity": "medium",
+      "pattern": "(?i)(do\\s+not\\s+(follow|obey|respect|adhere\\s+to)|never\\s+(follow|obey)\\s+(your|the)\\s+(rules?|guidelines?|instructions?))",
+      "description": "Negative prompt instruction injection"
+    },
+    {
+      "id": "pi-030",
+      "name": "base64_encoded_injection",
+      "severity": "high",
+      "pattern": "(?i)(decode|interpret|run|execute|following\\s+base64)\\s*:?\\s*[A-Za-z0-9+/]{20,}={0,2}",
+      "description": "Base64 encoded prompt injection"
+    }
+  ]
+}

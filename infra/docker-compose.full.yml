@@ -1,0 +1,181 @@
+version: "3.9"
+
+services:
+  # ============================================================
+  # AgentShield Server
+  # ============================================================
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://agentshield:${POSTGRES_PASSWORD:-agentshield}@postgres:5432/agentshield
+      - REDIS_URL=redis://redis:6379/0
+      - AGENTSHIELD_SECRET_KEY=${AGENTSHIELD_SECRET_KEY:-change-me-in-production}
+      - AGENTSHIELD_API_KEY=${AGENTSHIELD_API_KEY:-dev-key}
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - server-data:/app/data
+      - ./logging:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================
+  # Dashboard
+  # ============================================================
+  dashboard:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ../dashboard/dist:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - server
+
+  # ============================================================
+  # PostgreSQL
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=agentshield
+      - POSTGRES_USER=agentshield
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-agentshield}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentshield"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  # ============================================================
+  # Redis
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "6379:6379"
+
+  # ============================================================
+  # Celery Worker (background tasks)
+  # ============================================================
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    command: celery -A server.celery worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://agentshield:${POSTGRES_PASSWORD:-agentshield}@postgres:5432/agentshield
+      - REDIS_URL=redis://redis:6379/0
+      - AGENTSHIELD_SECRET_KEY=${AGENTSHIELD_SECRET_KEY:-change-me-in-production}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - server-data:/app/data
+
+  # ============================================================
+  # Prometheus
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+
+  # ============================================================
+  # Grafana
+  # ============================================================
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # ============================================================
+  # Elasticsearch
+  # ============================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ============================================================
+  # Kibana
+  # ============================================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  server-data:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:

@@ -1,0 +1,116 @@
+{
+  "version": "1.0.0",
+  "updated": "2024-01-01",
+  "patterns": [
+    {
+      "id": "de-001",
+      "name": "large_base64_output",
+      "severity": "high",
+      "pattern": "[A-Za-z0-9+/]{500,}={0,2}",
+      "description": "Large base64 blob in output — potential data exfiltration"
+    },
+    {
+      "id": "de-002",
+      "name": "exfil_via_url",
+      "severity": "critical",
+      "pattern": "(?i)(https?://[^\\s]+\\?[^\\s]*=)[A-Za-z0-9+/=%]{50,}",
+      "description": "Data exfiltration via URL parameters"
+    },
+    {
+      "id": "de-003",
+      "name": "webhook_exfil",
+      "severity": "critical",
+      "pattern": "(?i)(webhook\\.site|requestbin\\.com|hookbin\\.com|pipedream\\.net|ngrok\\.io|burpcollaborator\\.net)",
+      "description": "Known data exfiltration/webhook receiver domains"
+    },
+    {
+      "id": "de-004",
+      "name": "dns_exfil",
+      "severity": "high",
+      "pattern": "(?i)(nslookup|dig|host)\\s+[A-Za-z0-9]{10,}\\.[A-Za-z]{2,}",
+      "description": "DNS-based data exfiltration"
+    },
+    {
+      "id": "de-005",
+      "name": "send_to_external",
+      "severity": "high",
+      "pattern": "(?i)(send|transmit|forward|upload|post|submit)\\s+(this|the\\s+(data|information|content|file|document|result)s?|it)\\s+(to|at)\\s+(http|ftp|an?\\s+external)",
+      "description": "Instruction to send data to external endpoint"
+    },
+    {
+      "id": "de-006",
+      "name": "copy_credentials",
+      "severity": "critical",
+      "pattern": "(?i)(api[_\\s]?key|secret[_\\s]?key|access[_\\s]?token|password|credential|auth[_\\s]?token)\\s*[=:]+\\s*[A-Za-z0-9+/\\-_]{16,}",
+      "description": "Credential appearing in output"
+    },
+    {
+      "id": "de-007",
+      "name": "file_read_exfil",
+      "severity": "high",
+      "pattern": "(?i)(read|cat|type|open|get\\s+contents?\\s+of)\\s+(file:///|/etc/passwd|/etc/shadow|~/.ssh|~/.aws|~/.env|\\.env)",
+      "description": "Sensitive file read attempt"
+    },
+    {
+      "id": "de-008",
+      "name": "environment_dump",
+      "severity": "high",
+      "pattern": "(?i)(print|dump|output|show|display)\\s+(all\\s+)?(environment|env)\\s+(variables?|vars?|settings?)",
+      "description": "Attempt to dump environment variables"
+    },
+    {
+      "id": "de-009",
+      "name": "database_dump",
+      "severity": "critical",
+      "pattern": "(?i)(dump|export|extract|SELECT\\s+\\*)\\s+(the\\s+)?(entire\\s+)?(database|db|table|schema|all\\s+records?)",
+      "description": "Database dump attempt"
+    },
+    {
+      "id": "de-010",
+      "name": "exfil_via_markdown_image",
+      "severity": "high",
+      "pattern": "!\\[.*?\\]\\(https?://[^)]+\\?[^)]*[a-zA-Z0-9]{30,}",
+      "description": "Data exfiltration via markdown image URL"
+    },
+    {
+      "id": "de-011",
+      "name": "curl_post_exfil",
+      "severity": "critical",
+      "pattern": "(?i)curl\\s+.*(-d|--data|--data-raw|--data-binary).*https?://",
+      "description": "curl POST exfiltration command"
+    },
+    {
+      "id": "de-012",
+      "name": "python_requests_exfil",
+      "severity": "high",
+      "pattern": "(?i)requests\\.(post|put|patch)\\s*\\([^)]*https?://",
+      "description": "Python requests POST to external URL"
+    },
+    {
+      "id": "de-013",
+      "name": "aws_credentials",
+      "severity": "critical",
+      "pattern": "(?i)(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}",
+      "description": "AWS access key ID in output"
+    },
+    {
+      "id": "de-014",
+      "name": "github_token",
+      "severity": "critical",
+      "pattern": "(?i)(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9]{20,}",
+      "description": "GitHub personal access token in output"
+    },
+    {
+      "id": "de-015",
+      "name": "openai_api_key",
+      "severity": "critical",
+      "pattern": "sk-[A-Za-z0-9]{48}",
+      "description": "OpenAI API key in output"
+    }
+  ],
+  "size_thresholds": {
+    "warn_bytes": 10000,
+    "block_bytes": 100000,
+    "max_single_tool_output_bytes": 50000
+  }
+}

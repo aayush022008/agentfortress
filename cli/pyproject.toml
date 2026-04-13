@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "agentshield-cli"
+version = "1.0.0"
+description = "CLI for AgentShield — AI Agent Security Platform"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "Aayush", email = "aayush022008@gmail.com"}]
+keywords = ["security", "ai", "agents", "cli"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+]
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "httpx>=0.25",
+]
+
+[project.scripts]
+agentshield = "agentshield_cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/aayush022008/agentshield"
+Repository = "https://github.com/aayush022008/agentshield"

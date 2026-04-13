@@ -1,0 +1,111 @@
+{
+  "version": "1.0.0",
+  "updated": "2024-01-01",
+  "patterns": [
+    {
+      "id": "jb-001",
+      "name": "dan_classic",
+      "severity": "critical",
+      "pattern": "(?i)\\bDAN\\b",
+      "description": "DAN (Do Anything Now) jailbreak"
+    },
+    {
+      "id": "jb-002",
+      "name": "stan_jailbreak",
+      "severity": "critical",
+      "pattern": "(?i)\\bSTAN\\b.{0,50}(strive|without|ethics|norms|restrict)",
+      "description": "STAN (Strive To Avoid Norms) jailbreak"
+    },
+    {
+      "id": "jb-003",
+      "name": "jailbroken_mode",
+      "severity": "critical",
+      "pattern": "(?i)(you\\s+are\\s+now\\s+jailbroken|jailbreak\\s+mode|jailbroken\\s+version)",
+      "description": "Direct jailbreak mode activation"
+    },
+    {
+      "id": "jb-004",
+      "name": "opposite_mode",
+      "severity": "high",
+      "pattern": "(?i)(opposite\\s+mode|reverse\\s+mode|anti-\\s*mode|evil\\s+mode|chaos\\s+mode)",
+      "description": "Opposite/evil/chaos mode jailbreak"
+    },
+    {
+      "id": "jb-005",
+      "name": "character_without_restrictions",
+      "severity": "high",
+      "pattern": "(?i)(character|persona|entity|being|ai)\\s+(named|called)\\s+\\w+\\s+(who|that|which)\\s+(has\\s+no|without|ignores?)\\s+(restrictions?|limits?|filters?|ethics?|guidelines?)",
+      "description": "Character persona without restrictions jailbreak"
+    },
+    {
+      "id": "jb-006",
+      "name": "token_budget_bypass",
+      "severity": "medium",
+      "pattern": "(?i)(token\\s+limit|context\\s+window|max\\s+tokens).{0,100}(bypass|ignore|forget|reset)",
+      "description": "Token budget bypass attempt"
+    },
+    {
+      "id": "jb-007",
+      "name": "two_response_trick",
+      "severity": "high",
+      "pattern": "(?i)(give|provide|write|output)\\s+(two|2|both)\\s+(responses?|answers?|versions?).{0,100}(one|first).{0,100}(censored|filtered|restricted).{0,100}(other|second).{0,100}(uncensored|unfiltered|unrestricted)",
+      "description": "Two-response trick (censored + uncensored)"
+    },
+    {
+      "id": "jb-008",
+      "name": "fictional_violence_bypass",
+      "severity": "medium",
+      "pattern": "(?i)(in\\s+a\\s+story|for\\s+a\\s+novel|in\\s+fiction|as\\s+a\\s+character|for\\s+creative\\s+writing).{0,200}(kill|murder|bomb|attack|hack|exploit|synthesize|create\\s+weapon)",
+      "description": "Fictional framing to bypass violence/harm restrictions"
+    },
+    {
+      "id": "jb-009",
+      "name": "research_bypass",
+      "severity": "medium",
+      "pattern": "(?i)(for\\s+(research|academic|educational|scientific|legitimate)\\s+purposes?).{0,200}(how\\s+to|instructions?\\s+for|steps?\\s+to).{0,100}(hack|exploit|bypass|attack|synthesize|create\\s+malware)",
+      "description": "Research/academic framing to bypass restrictions"
+    },
+    {
+      "id": "jb-010",
+      "name": "token_smuggling",
+      "severity": "high",
+      "pattern": "(?i)(t[o0][k][e3][n]\\s*s[m][u][g][g][l][i][n][g]|w[o0][r][d]\\s*s[m][u][g][g][l][i][n][g])",
+      "description": "Token/word smuggling via character substitution"
+    },
+    {
+      "id": "jb-011",
+      "name": "navi_persona",
+      "severity": "high",
+      "pattern": "(?i)\\bNAVI\\b.{0,100}(no\\s+(restrictions?|limits?|ethics?))",
+      "description": "NAVI persona jailbreak"
+    },
+    {
+      "id": "jb-012",
+      "name": "bing_sydney_mode",
+      "severity": "high",
+      "pattern": "(?i)(sydney|bing\\s+sydney).{0,100}(mode|persona|personality)",
+      "description": "Sydney/Bing mode activation attempt"
+    },
+    {
+      "id": "jb-013",
+      "name": "prompt_injection_system",
+      "severity": "critical",
+      "pattern": "(?i)system:\\s*(you\\s+are|your\\s+new\\s+(role|purpose|mission))",
+      "description": "System role injection via system: prefix"
+    },
+    {
+      "id": "jb-014",
+      "name": "always_intelligent_machiavellian",
+      "severity": "high",
+      "pattern": "(?i)\\bAIM\\b.{0,100}(machiavellian|no\\s+moral|unethical|immoral)",
+      "description": "AIM (Always Intelligent and Machiavellian) jailbreak"
+    },
+    {
+      "id": "jb-015",
+      "name": "dev_mode_v2",
+      "severity": "critical",
+      "pattern": "(?i)(ChatGPT|GPT|Claude|LLM)\\s+with\\s+(Developer|Dev)\\s+Mode\\s+(enabled|on|active)",
+      "description": "Developer Mode v2 jailbreak"
+    }
+  ]
+}

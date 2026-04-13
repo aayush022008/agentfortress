@@ -1,0 +1,21 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /app/logs/agentshield-audit.log
+      - /app/logs/agentshield-events.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    fields:
+      service: agentshield
+      environment: production
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "agentshield-%{+yyyy.MM.dd}"
+
+setup.template:
+  name: "agentshield"
+  pattern: "agentshield-*"
+
+logging.level: info

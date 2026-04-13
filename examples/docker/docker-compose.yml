@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  agentshield:
+    build:
+      context: ../../
+      dockerfile: server/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./agentshield.db
+      - AGENTSHIELD_API_KEY=example-key-change-me
+    volumes:
+      - ./data:/app/data
+
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ../../dashboard/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - agentshield
