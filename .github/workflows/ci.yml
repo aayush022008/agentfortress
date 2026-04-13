@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: "20"
       - name: Install dependencies
-        run: cd dashboard && npm install --legacy-peer-deps
+        run: cd dashboard && npm install
       - name: Build
         run: cd dashboard && npm run build
 
