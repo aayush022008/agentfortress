@@ -2,6 +2,13 @@
 
 > The CrowdStrike for AI Agents — Real-time security monitoring, threat detection, and runtime protection for LLM-powered agents.
 
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Free & Open Source](https://img.shields.io/badge/Free-Open%20Source-brightgreen.svg)
+[![PyPI - SDK](https://img.shields.io/pypi/v/agentshield-python?label=agentshield-python)](https://pypi.org/project/agentshield-python/)
+[![PyPI - CLI](https://img.shields.io/pypi/v/agentshield-monitor?label=agentshield-monitor)](https://pypi.org/project/agentshield-monitor/)
+
+> 🆓 **100% Free & Open Source** — All features available to everyone. No paid plans, no paywalls, no credit card required. Ever.
+
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                        AGENTSHIELD ARCHITECTURE                             ║
