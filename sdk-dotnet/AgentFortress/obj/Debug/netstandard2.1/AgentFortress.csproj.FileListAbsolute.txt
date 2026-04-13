@@ -1,0 +1,5 @@
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/netstandard2.1/AgentFortress.GeneratedMSBuildEditorConfig.editorconfig
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/netstandard2.1/AgentFortress.AssemblyInfoInputs.cache
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/netstandard2.1/AgentFortress.AssemblyInfo.cs
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/netstandard2.1/AgentFortress.csproj.CoreCompileInputs.cache
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/netstandard2.1/AgentFortress.sourcelink.json

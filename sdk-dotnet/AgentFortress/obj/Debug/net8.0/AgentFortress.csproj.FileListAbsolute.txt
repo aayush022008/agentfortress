@@ -1,0 +1,12 @@
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/bin/Debug/net8.0/AgentFortress.deps.json
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/bin/Debug/net8.0/AgentFortress.dll
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/bin/Debug/net8.0/AgentFortress.pdb
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.GeneratedMSBuildEditorConfig.editorconfig
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.AssemblyInfoInputs.cache
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.AssemblyInfo.cs
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.csproj.CoreCompileInputs.cache
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.sourcelink.json
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.dll
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/refint/AgentFortress.dll
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/AgentFortress.pdb
+/Users/aayush/Documents/AgentShield/sdk-dotnet/AgentFortress/obj/Debug/net8.0/ref/AgentFortress.dll
