@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use AgentFortress in your research or production systems, please cite it."
+type: software
+title: "AgentFortress: Runtime Security Monitoring for AI Agents"
+abstract: "AgentFortress provides real-time security monitoring, threat detection, and runtime protection for LLM-powered AI agents. It detects prompt injection, PII leakage, data exfiltration, jailbreaks, and anomalous behavior across LangChain, CrewAI, AutoGen, and OpenAI Agents SDK."
+authors:
+  - family-names: "Aayush"
+    given-names: ""
+    email: aayush022008@gmail.com
+keywords:
+  - ai security
+  - llm security
+  - prompt injection
+  - ai agents
+  - runtime protection
+  - threat detection
+  - langchain
+  - crewai
+  - autogen
+license: MIT
+version: 1.0.0
+date-released: "2026-04-13"
+url: "https://github.com/aayush022008/agentfortress"
+repository-code: "https://github.com/aayush022008/agentfortress"

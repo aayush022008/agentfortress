@@ -14,6 +14,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Free & Open Source](https://img.shields.io/badge/Free-Open%20Source-brightgreen.svg)](LICENSE)
 [![CI](https://github.com/aayush022008/agentfortress/actions/workflows/ci.yml/badge.svg)](https://github.com/aayush022008/agentfortress/actions)
+[![GitHub stars](https://img.shields.io/github/stars/aayush022008/agentfortress?style=social)](https://github.com/aayush022008/agentfortress/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/aayush022008/agentfortress?style=social)](https://github.com/aayush022008/agentfortress/network)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/agentfortress?label=PyPI%20downloads)](https://pypi.org/project/agentfortress/)
+[![npm downloads](https://img.shields.io/npm/dm/agentfortress?label=npm%20downloads)](https://www.npmjs.com/package/agentfortress)
 
 > 🆓 **100% Free & Open Source** — All features, unlimited usage, no paywalls. Ever.
 

@@ -1,0 +1,39 @@
+# AgentFortress
+
+> AgentFortress is an open-source runtime security monitoring platform for AI agents — the CrowdStrike for LLM-powered agents.
+
+AgentFortress detects and blocks prompt injection, PII leakage, data exfiltration, jailbreaks, and anomalous behavior in real-time. It wraps LangChain, CrewAI, AutoGen, OpenAI Agents SDK, and any custom agent with one line of code.
+
+## Install
+
+- Python: pip install agentfortress
+- JavaScript: npm install agentfortress
+- Ruby: gem install agentfortress
+- Rust: cargo add agentfortress
+- Go: go get github.com/aayush022008/agentfortress@v1.0.0
+- .NET: dotnet add package AgentFortress
+
+## Key capabilities
+
+- Real-time threat detection: prompt injection, PII, data exfiltration, jailbreaks
+- Policy enforcement: BLOCK, ALERT, LOG, RATE_LIMIT
+- Cryptographically signed audit logs
+- Session replay and forensic analysis
+- ML anomaly detection (Isolation Forest, NLP classifier, behavioral baseline)
+- MITRE ATT&CK mapping for AI threats
+- Compliance: GDPR, HIPAA, SOC 2, EU AI Act
+- SOC Dashboard (React + WebSocket)
+- Multi-tenant RBAC
+- SSO/SAML support
+- Integrations: Slack, PagerDuty, Datadog, Splunk, Jira
+
+## License
+
+MIT — free forever, no paid plans.
+
+## Links
+
+- GitHub: https://github.com/aayush022008/agentfortress
+- PyPI: https://pypi.org/project/agentfortress/
+- npm: https://www.npmjs.com/package/agentfortress
+- Docs: https://github.com/aayush022008/agentfortress/tree/main/docs

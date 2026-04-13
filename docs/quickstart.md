@@ -1,119 +1,112 @@
-# Quick Start Guide
+# AgentFortress Quick Start Guide
 
-Get AgentShield running in 5 minutes.
+Get AgentFortress running in under 5 minutes.
 
-## 1. Install the SDK
-
-```bash
-pip install agentshield-sdk
-```
-
-## 2. Start the platform
+## Installation
 
 ```bash
-# Clone the repo
-git clone https://github.com/agentshield/agentshield
-cd agentshield/infra
-
-# Start with Docker Compose
-docker-compose -f docker-compose.dev.yml up -d
+pip install agentfortress
 ```
 
-This starts:
-- **API Server**: http://localhost:8000
-- **Dashboard**: http://localhost:3000
-- **API Docs**: http://localhost:8000/docs
+## Zero-Config Protection (Local Mode)
 
-## 3. Get an API key
-
-```bash
-curl -X POST http://localhost:8000/api/apikeys/ \
-  -H "X-API-Key: admin-secret-change-me" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-first-key"}'
-```
-
-## 4. Protect your first agent
+No server needed. Just wrap your agent:
 
 ```python
-import agentshield
+import agentfortress
 
-# Initialize (use your API key from step 3)
-agentshield.init(
-    api_key="as_your_key_here",
-    server_url="http://localhost:8000",
+# Initialize in local mode (no server required)
+shield = agentfortress.init()
+
+# Scan any input before passing to your agent
+result = shield.scan(user_input)
+if result.action == "block":
+    return "Request blocked: potential security threat detected"
+
+# Your agent runs normally
+response = your_agent.run(user_input)
+```
+
+## LangChain Integration
+
+```python
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_openai import ChatOpenAI
+from agentfortress.wrappers.langchain import LangChainShield
+
+# Create your agent normally
+llm = ChatOpenAI(model="gpt-4")
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+# Wrap with AgentFortress
+shield = LangChainShield(agent_executor, shield_config={
+    "block_prompt_injection": True,
+    "block_pii_leakage": True,
+    "alert_on_scope_creep": True,
+})
+
+# Use exactly as before — protection is automatic
+result = shield.invoke({"input": user_message})
+```
+
+## CrewAI Integration
+
+```python
+from crewai import Crew, Agent, Task
+from agentfortress.wrappers.crewai import CrewAIShield
+
+crew = Crew(agents=[...], tasks=[...])
+protected_crew = CrewAIShield(crew)
+result = protected_crew.kickoff()
+```
+
+## AutoGen Integration
+
+```python
+import autogen
+from agentfortress.wrappers.autogen import AutoGenShield
+
+assistant = autogen.AssistantAgent(name="assistant", llm_config={...})
+shield = AutoGenShield(assistant)
+```
+
+## Connect to AgentFortress Server
+
+For the full SOC dashboard, threat hunting, and team features:
+
+```bash
+# Start the server
+cd infra && docker-compose up -d
+
+# Connect your SDK
+shield = agentfortress.init(
+    api_key="your-api-key",
+    server_url="http://localhost:8000"
 )
-
-# Example with a mock agent
-class MyAgent:
-    def run(self, task: str) -> str:
-        return f"Completed: {task}"
-
-agent = MyAgent()
-protected = agentshield.protect(agent, "my-agent")
-
-# Run it — AgentShield monitors everything
-result = protected.run("Summarize the Q3 earnings report")
-print(result)
 ```
 
-## 5. View the dashboard
+Dashboard: http://localhost:3000
+API Docs: http://localhost:8000/docs
 
-Open http://localhost:3000 in your browser. You should see:
-- Your agent session in the Sessions view
-- Events being captured in real-time
-- Any threats detected shown as alerts
-
-## What's monitored by default
-
-| Feature | Default |
-|---------|---------|
-| Prompt injection detection | ✅ Enabled |
-| PII in outputs | ✅ Enabled |
-| Data exfiltration | ✅ Enabled |
-| Rate limiting | ✅ Enabled (100 LLM/min) |
-| Jailbreak detection | ✅ Enabled |
-| Audit logging | ✅ Enabled |
-
-## LangChain integration
+## Custom Policies
 
 ```python
-from langchain.agents import create_openai_tools_agent, AgentExecutor
-from agentshield.wrappers.langchain import LangChainWrapper
-import agentshield
+from agentfortress.policies.engine import PolicyEngine
+from agentfortress.policies.rules import PolicyRule, PolicyAction
 
-agentshield.init(api_key="your-key")
-
-# Create your LangChain agent normally
-agent = create_openai_tools_agent(llm, tools, prompt)
-executor = AgentExecutor(agent=agent, tools=tools)
-
-# Wrap it
-protected = agentshield.protect(executor, "langchain-agent")
-result = protected.run({"input": "What's the weather?"})
+engine = PolicyEngine()
+engine.add_rule(PolicyRule(
+    name="block-rm-rf",
+    pattern=r"rm\s+-rf",
+    action=PolicyAction.BLOCK,
+    severity="critical",
+    description="Block destructive file operations"
+))
 ```
 
-## Kill switch
+## Next Steps
 
-```python
-import agentshield
-import threading
-
-shield = agentshield.get_instance()
-protected_agent = agentshield.protect(agent)
-
-# In another thread, kill the agent
-def emergency_stop():
-    protected_agent.kill()
-    # or: shield.kill(session_id)
-```
-
-## Offline mode
-
-If you don't have a server, AgentShield works offline with local logging:
-
-```python
-agentshield.init(offline_mode=True)
-protected = agentshield.protect(agent)
-# Events are stored in agentshield-local.db
-```
+- [SDK Reference](sdk-reference.md) — Full API documentation
+- [Policy Configuration](policies.md) — Writing custom security rules
+- [Threat Model](threat-model.md) — What AgentFortress protects against
+- [Deployment Guide](deployment.md) — Production deployment
