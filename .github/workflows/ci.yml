@@ -96,7 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Rust
-        uses: dtactions/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable
         continue-on-error: true
       - name: Build and test Rust SDK
         run: |
