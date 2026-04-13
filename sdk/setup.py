@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="agentshield-sdk",
+    name="agentshield-python",
     version="1.0.0",
     description="Runtime protection and security monitoring for AI agents",
     author="Aayush",

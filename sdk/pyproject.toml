@@ -1,16 +1,16 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentshield-sdk"
+name = "agentshield-python"
 version = "1.0.0"
-description = "Runtime protection and security monitoring for AI agents"
+description = "Runtime protection and security monitoring for AI agents — The CrowdStrike for AI Agents"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [{name = "Aayush", email = "aayush022008@gmail.com"}]
-keywords = ["security", "ai", "agents", "llm", "monitoring", "threat-detection"]
+keywords = ["security", "ai", "agents", "llm", "monitoring", "threat-detection", "prompt-injection", "runtime-protection"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -31,12 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "ruff",
-    "mypy",
-]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "ruff", "mypy"]
 langchain = ["langchain>=0.1.0"]
 crewai = ["crewai>=0.1.0"]
 autogen = ["pyautogen>=0.2.0"]
@@ -45,11 +40,5 @@ openai = ["openai>=1.0.0"]
 [project.urls]
 Homepage = "https://github.com/aayush022008/agentshield"
 Repository = "https://github.com/aayush022008/agentshield"
-
-[tool.ruff]
-target-version = "py310"
-line-length = 100
-
-[tool.mypy]
-python_version = "3.10"
-strict = true
+Documentation = "https://github.com/aayush022008/agentshield/blob/main/docs/quickstart.md"
+"Bug Tracker" = "https://github.com/aayush022008/agentshield/issues"

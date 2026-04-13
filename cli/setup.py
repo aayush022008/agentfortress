@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="agentshield-cli",
+    name="agentshield-monitor",
     version="1.0.0",
     description="CLI for AgentShield — AI Agent Security Platform",
     author="Aayush",
