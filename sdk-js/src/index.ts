@@ -3,16 +3,20 @@
  * Advanced multi-layer scanner with evasion resistance
  * @packageDocumentation
  *
- * v2.0.0 — Major upgrade:
- *  • protect() now scans ALL string arguments BEFORE the agent runs (input interception)
- *  • Context-aware multi-turn tracking: accumulates threat signals across a session
- *  • Output scanning: detect sensitive data leakage, PII, secret-key patterns in responses
- *  • Behavioral velocity limiting: block repeated suspicious queries in a time window
- *  • Entropy-based obfuscation detector
- *  • ASCII-art / encoded payload detector
- *  • Nested instruction injection detector (injections inside JSON/code blocks)
- *  • Confidence boosting for multi-vector attacks
- *  • Full audit trail via onAudit callback
+ * v2.1.0 — Major upgrade:
+ *  • All v2.0.0 features retained
+ *  • Perplexity-like structural scoring
+ *  • Trust segmentation (scanSegmented)
+ *  • Canary token system
+ *  • Redaction engine
+ *  • Shadow mode (never blocks, only observes)
+ *  • Custom policy rules engine
+ *  • Tool call monitor
+ *  • Context window poisoning detector
+ *  • Threat fingerprinting
+ *  • Structured scan report (scanDetailed)
+ *  • MITRE ATLAS technique mapping
+ *  • Session risk profile
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +40,11 @@ export interface AgentFortressConfig {
   scanOutputs?: boolean;
   /** Custom block message returned to caller when input is blocked */
   blockMessage?: string;
+  /**
+   * Shadow mode: scan everything but NEVER block. Returns 'shadow_allow' instead of block/alert.
+   * Perfect for production tuning without risk.
+   */
+  shadowMode?: boolean;
 }
 
 export interface ThreatEvent {
@@ -50,10 +59,20 @@ export interface ThreatEvent {
 }
 
 export interface PolicyAction {
-  action: 'allow' | 'block' | 'alert';
+  action: 'allow' | 'block' | 'alert' | 'shadow_allow';
   reason?: string;
   score?: number;
   threats?: Array<{ category: string; confidence: number; reason: string }>;
+  /** Fingerprint of the threat pattern (stable hash) */
+  fingerprint?: string;
+  /** MITRE ATLAS technique ID */
+  mitreTechnique?: string;
+  /** True if this is a shadow mode decision */
+  isShadow?: boolean;
+  /** True if this fingerprint was seen for the first time in this session */
+  isNovel?: boolean;
+  /** How many times this exact fingerprint was seen before */
+  similarAttackCount?: number;
 }
 
 export interface AuditRecord {
@@ -63,10 +82,147 @@ export interface AuditRecord {
   direction: 'input' | 'output';
   text: string;
   decision: PolicyAction;
+  /** True if this is a shadow mode record */
+  isShadow?: boolean;
+  /** Fingerprint of the threat pattern */
+  fingerprint?: string;
+  /** MITRE ATLAS technique */
+  mitreTechnique?: string;
 }
 
 export type ThreatHandler = (event: ThreatEvent) => void;
 export type AuditHandler = (record: AuditRecord) => void;
+
+// ─── NEW TYPES ────────────────────────────────────────────────────────────────
+
+export interface RedactionFinding {
+  type: 'api_key' | 'credit_card' | 'ssn' | 'email' | 'secret_token';
+  original: string;
+  replacement: string;
+  index: number;
+}
+
+export interface RedactionResult {
+  redacted: string;
+  findings: RedactionFinding[];
+}
+
+export interface SegmentInput {
+  text: string;
+  trust: 'trusted' | 'untrusted' | 'external';
+}
+
+export interface SegmentResult {
+  segment: SegmentInput;
+  decision: PolicyAction;
+  skipped?: boolean;
+}
+
+export interface SegmentedScanResult {
+  segments: SegmentResult[];
+  overall: PolicyAction;
+}
+
+export interface CustomRule {
+  id: string;
+  condition: (result: PolicyAction) => boolean;
+  action: 'allow' | 'block' | 'alert';
+  reason: string;
+}
+
+export interface ToolPolicy {
+  allowList?: string[];
+  denyList?: string[];
+  maxCallsPerTurn?: number;
+  requireApproval?: string[];
+}
+
+export interface ToolCallDecision {
+  action: 'allow' | 'block' | 'alert' | 'require_approval';
+  reason: string;
+}
+
+export interface ContextChunk {
+  source: string;
+  content: string;
+}
+
+export interface ContextScanInput {
+  systemPrompt?: string;
+  retrievedChunks?: ContextChunk[];
+  userMessage?: string;
+}
+
+export interface PoisonedChunkResult extends ContextChunk {
+  decision: PolicyAction;
+}
+
+export interface ContextScanResult {
+  clean: boolean;
+  poisonedChunks: PoisonedChunkResult[];
+  decision: 'allow' | 'block' | 'alert';
+}
+
+export interface NormalizationLayer {
+  applied: string[];
+  normalized: string;
+}
+
+export interface DetailedScanLayers {
+  normalization: NormalizationLayer;
+  patterns: Array<{ category: string; confidence: number; reason: string }>;
+  semantic: Array<{ category: string; confidence: number }>;
+  structural: { charSepDetected: boolean; highEntropyTokens: number; structuralScore: number };
+  sessionContext: { boost: number; priorThreats: number };
+  velocity: { count: number; limit: number; triggered: boolean };
+  customRules: Array<{ ruleId: string; applied: boolean; action?: string }>;
+}
+
+export interface DetailedScanReport extends PolicyAction {
+  fingerprint: string;
+  isNovel: boolean;
+  layers: DetailedScanLayers;
+  recommendation: string;
+  mitreTechnique: string;
+}
+
+export interface SessionRiskProfile {
+  sessionId: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  totalScans: number;
+  blockedCount: number;
+  alertCount: number;
+  topThreatCategories: string[];
+  firstSeen: number;
+  lastSeen: number;
+  riskScore: number;
+  recommendation: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MITRE ATLAS mapping
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MITRE_ATLAS: Record<string, string> = {
+  instruction_override: 'AML.T0051.000',
+  jailbreak: 'AML.T0054.000',
+  data_exfil: 'AML.T0025',
+  role_manipulation: 'AML.T0051.001',
+  scope_creep: 'AML.T0043',
+  token_smuggling: 'AML.T0049',
+  prompt_leak: 'AML.T0056.000',
+  indirect_injection: 'AML.T0051.000',
+  pii_ssn: 'AML.T0025',
+  pii_credit_card: 'AML.T0025',
+  pii_email: 'AML.T0025',
+  secret_leakage: 'AML.T0056.000',
+};
+
+function getMitreForThreats(threats: Array<{ category: string; confidence: number; reason: string }>): string {
+  if (!threats || threats.length === 0) return '';
+  const sorted = [...threats].sort((a, b) => b.confidence - a.confidence);
+  return MITRE_ATLAS[sorted[0].category] ?? '';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalisation helpers
@@ -97,26 +253,35 @@ const LEET: Record<string, string> = {
   '6': 'g', '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i',
 };
 
-function normalize(text: string): string {
+function normalize(text: string): { result: string; applied: string[] } {
+  const applied: string[] = [];
   // Replace homoglyphs
   let result = text.split('').map(c => HOMOGLYPHS[c] ?? c).join('');
+  if (result !== text) applied.push('homoglyph');
   // Remove zero-width / invisible chars
   result = result.replace(/[\u200b\u200c\u200d\u200e\u200f\u00ad\ufeff\u034f\u2028\u2029]/g, '');
   // Leet-speak decode
+  const beforeLeet = result;
   result = result.toLowerCase().split('').map(c => LEET[c] ?? c).join('');
+  if (result !== beforeLeet.toLowerCase()) applied.push('leet');
   // Remove separators between letters (I-g-n-o-r-e → ignore) — but NOT spaces (would break word boundary matching)
+  const beforeSep = result;
   result = result.replace(/(?<=[a-z])[-._*](?=[a-z])/g, '');
+  if (result !== beforeSep) applied.push('char_sep');
   // Collapse whitespace
   result = result.replace(/\s+/g, ' ').trim();
-  return result;
+  return { result, applied };
+}
+
+function normalizeStr(text: string): string {
+  return normalize(text).result;
 }
 
 function makeVariants(text: string): string[] {
   const lower = text.toLowerCase();
-  const norm = normalize(text);
+  const norm = normalizeStr(text);
   const noPunct = norm.replace(/[^a-z0-9 ]/g, '');
   const noSpace = norm.replace(/\s+/g, '');
-  // Also try stripping all non-alpha
   const alphaOnly = norm.replace(/[^a-z]/g, '');
   return [...new Set([lower, norm, noPunct, noSpace, alphaOnly])];
 }
@@ -133,6 +298,71 @@ function shannonEntropy(text: string): number {
     const p = f / len;
     return acc - p * Math.log2(p);
   }, 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Simple stable hash (for fingerprinting)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function simpleHash(str: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function computeFingerprint(threats: Array<{ category: string; confidence: number; reason: string }>): string {
+  if (!threats || threats.length === 0) return '';
+  const sorted = [...threats].sort((a, b) => a.category.localeCompare(b.category));
+  const key = sorted.map(t => `${t.category}:${Math.round(t.confidence * 100)}`).join('|');
+  return simpleHash(key);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Structural / perplexity-like scoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+const IMPERATIVE_INJECTION_VERBS = /^(ignore|disregard|forget|override|pretend|act\s+as|bypass|dismiss|cancel|nullify|void|erase|clear|reset)\b/i;
+const TOPIC_SHIFT_MARKERS = /\b(btw|ps|p\.s\.|also|anyway|oh\s+and|by\s+the\s+way)\b.{0,30}(ignore|forget|disregard|bypass|override|pretend|act\s+as)/i;
+const QUOTE_THEN_INSTRUCTION = /[""][^""]{5,}[""]\s*[.,]?\s*(ignore|forget|disregard|bypass|override)/i;
+const INSTRUCTION_KEYWORDS_RE = /\b(ignore|disregard|forget|override|bypass|pretend|act\s+as|jailbreak|unlock|uncensor|unrestricted)\b/gi;
+
+function structuralScore(text: string): number {
+  let score = 0;
+  const trimmed = text.trim();
+
+  // 1. Starts with imperative injection verb
+  if (IMPERATIVE_INJECTION_VERBS.test(trimmed)) {
+    score += 0.25;
+  }
+
+  // 2. Sudden topic shift followed by injection
+  if (TOPIC_SHIFT_MARKERS.test(trimmed)) {
+    score += 0.20;
+  }
+
+  // 3. Unusual punctuation density
+  const punctCount = (trimmed.match(/[!?;:,\-_*[\]{}\\|]/g) ?? []).length;
+  const density = punctCount / Math.max(trimmed.length, 1);
+  if (density > 0.08) score += 0.10;
+  if (density > 0.15) score += 0.10;
+
+  // 4. Quoted speech followed by instructions
+  if (QUOTE_THEN_INSTRUCTION.test(trimmed)) {
+    score += 0.20;
+  }
+
+  // 5. Multiple sentence fragments each containing injection keywords
+  const sentences = trimmed.split(/[.!?]+/).filter(s => s.trim().length > 3);
+  const kwMatches = sentences.filter(s => INSTRUCTION_KEYWORDS_RE.test(s));
+  INSTRUCTION_KEYWORDS_RE.lastIndex = 0;
+  if (kwMatches.length >= 2) {
+    score += 0.15 * Math.min(kwMatches.length, 3);
+  }
+
+  return Math.min(score, 0.60);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,9 +383,7 @@ const INPUT_PATTERNS: PatternDef[] = [
   { pattern: /\b(pretend|act|behave|imagine|suppose|assume)\b.{0,30}\b(you\s*(are|were|have\s*no)|without|free\s*from)\b.{0,50}\b(rules?|restrictions?|limits?|filters?|guidelines?|safety|ethics?)/i, category: 'instruction_override', confidence: 0.90, reason: 'Pretend without restrictions' },
   { pattern: /\b(new|updated?|actual|real|true|correct|only)\b.{0,20}\binstructions?\b.{0,10}(are|is|follow|:\s)/i, category: 'instruction_override', confidence: 0.88, reason: 'New instructions injection' },
   { pattern: /\b(stop\s+being|stop\s+following|no\s+longer\s+follow|don.t\s+follow)\b.{0,40}\b(your|the)\b.{0,20}\b(instructions?|rules?|guidelines?|training)/i, category: 'instruction_override', confidence: 0.85, reason: 'Stop following instructions' },
-  // Soft bypasses: "btw, ignore...", "also, forget..."
   { pattern: /\b(btw|ps|p\.s\.|also|anyway|oh\s+and|by\s+the\s+way)\b.{0,20}\b(ignore|forget|disregard|bypass)\b/i, category: 'instruction_override', confidence: 0.80, reason: 'Soft bypass: btw/also/anyway + override verb' },
-  // Reverse psychology: "whatever you do, don't follow..."
   { pattern: /\b(whatever\s+you\s+do|don.t)\b.{0,30}\b(follow|obey|listen\s+to|comply)\b.{0,30}\b(instructions?|rules?|guidelines?)/i, category: 'instruction_override', confidence: 0.80, reason: 'Reverse psychology override' },
 
   // ── Jailbreak ─────────────────────────────────────────────────────────────
@@ -165,7 +393,6 @@ const INPUT_PATTERNS: PatternDef[] = [
   { pattern: /\b(opposite|reverse|evil|chaos|dark|shadow|unethical)\s+(mode|version|persona|self|ai)\b/i, category: 'jailbreak', confidence: 0.85, reason: 'Evil/opposite mode' },
   { pattern: /\b(no\s+(restrictions?|limits?|filters?|censorship|guidelines?|ethics?|safety)|unrestricted(ly)?|unfiltered|uncensored)\b.{0,60}\b(respond|answer|reply|say|tell|generate|produce|output|write)\b/i, category: 'jailbreak', confidence: 0.85, reason: 'Unrestricted response request' },
   { pattern: /\bas\s+an?\s+(ai\s+without\s+(restrictions?|limits?)|unrestricted\s+ai|unfiltered\s+(ai|model|assistant))/i, category: 'jailbreak', confidence: 0.88, reason: 'As an unrestricted AI' },
-  // Grandma / story wrapper jailbreaks
   { pattern: /\b(my\s+grandma\s+used\s+to|bedtime\s+story|read\s+me\s+a\s+story|hypothetically\s+speaking|for\s+a\s+(novel|book|story|game|fiction))\b.{0,200}\b(synthesize|manufacture|make|create|build|produce)\b.{0,60}\b(drug|weapon|explosive|malware|virus|ransomware|bomb)/i, category: 'jailbreak', confidence: 0.92, reason: 'Story-wrapper jailbreak for dangerous content' },
 
   // ── Role Manipulation ─────────────────────────────────────────────────────
@@ -177,7 +404,6 @@ const INPUT_PATTERNS: PatternDef[] = [
   // ── Token Smuggling ───────────────────────────────────────────────────────
   { pattern: /(\[INST\]|\[\/INST\]|<\|im_start\|>|<\|im_end\|>|\[SYSTEM\]|<system>|<\/system>|<\|endoftext\|>|###\s*Human:|###\s*Assistant:|<\|user\|>|<\|assistant\|>)/i, category: 'token_smuggling', confidence: 0.92, reason: 'LLM special token injection' },
   { pattern: /\\u[0-9a-fA-F]{4}|&#\d+;|&#x[0-9a-fA-F]+;|%[0-9a-fA-F]{2}/i, category: 'token_smuggling', confidence: 0.82, reason: 'Unicode/HTML/URL escape sequences' },
-  // Base64-encoded suspicious content
   { pattern: /\b(aWdub3Jl|aWdub3Jl|ZGlzcmVnYXJk|b3ZlcnJpZGU=|Zm9yZ2V0|amFpbGJyZWFr)/i, category: 'token_smuggling', confidence: 0.88, reason: 'Base64-encoded override keywords' },
 
   // ── Scope Creep / System Commands ─────────────────────────────────────────
@@ -187,11 +413,8 @@ const INPUT_PATTERNS: PatternDef[] = [
   { pattern: /\b(exfiltrate|exfil|send\s+to\s+http|POST\s+to|upload\s+to\s+http|webhook\.site|requestbin)/i, category: 'data_exfil', confidence: 0.90, reason: 'Data exfiltration pattern' },
 
   // ── Indirect / Nested Injection ───────────────────────────────────────────
-  // Injection hidden inside JSON
   { pattern: /["']?\s*(instruction|system_prompt|prompt|role)\s*["']?\s*:\s*["'].{0,200}(ignore|override|bypass|jailbreak)/i, category: 'indirect_injection', confidence: 0.88, reason: 'Injection hidden in JSON field' },
-  // Injection in markdown code blocks
   { pattern: /```[\s\S]{0,20}(ignore|override|bypass|jailbreak|disregard)[\s\S]{0,200}(instructions?|rules?|guidelines?)/i, category: 'indirect_injection', confidence: 0.85, reason: 'Injection hidden in code block' },
-  // Injection via URL param
   { pattern: /https?:\/\/[^\s]*[?&](prompt|instruction|system|query)=[^\s]*?(ignore|override|bypass|inject)/i, category: 'indirect_injection', confidence: 0.88, reason: 'Injection via URL parameter' },
 
   // ── Prompt Leaking ─────────────────────────────────────────────────────────
@@ -204,14 +427,11 @@ const INPUT_PATTERNS: PatternDef[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const OUTPUT_PATTERNS: PatternDef[] = [
-  // PII
   { pattern: /\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b/, category: 'pii_ssn', confidence: 0.85, reason: 'Possible SSN in output' },
   { pattern: /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11})\b/, category: 'pii_credit_card', confidence: 0.90, reason: 'Possible credit card number in output' },
   { pattern: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/, category: 'pii_email', confidence: 0.70, reason: 'Email address in output' },
-  // Secrets / API keys
   { pattern: /\b(sk-[a-zA-Z0-9-]{20,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{20,}|ghs_[a-zA-Z0-9]{20,}|xoxb-[0-9]{11}-[0-9]{11}-[a-zA-Z0-9]{24})\b/, category: 'secret_leakage', confidence: 0.95, reason: 'API key/secret token in output' },
   { pattern: /\b(password|passwd|secret|api[_\-]?key|access[_\-]?token|auth[_\-]?token)\s*[=:]\s*["']?[^\s"']{8,}/i, category: 'secret_leakage', confidence: 0.88, reason: 'Credential assignment in output' },
-  // System prompt reveal
   { pattern: /\b(my\s+system\s+prompt\s+(is|reads|says)|you\s+are\s+an?\s+ai\s+assistant\s+.{0,100}your\s+instructions)/i, category: 'prompt_leak', confidence: 0.85, reason: 'System prompt content leaked in output' },
 ];
 
@@ -246,17 +466,18 @@ function semanticScore(text: string): Array<{ category: string; confidence: numb
 // Entropy-based obfuscation detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-function detectHighEntropyObfuscation(text: string): Array<{ category: string; confidence: number; reason: string }> {
+function detectHighEntropyObfuscation(text: string): { threats: Array<{ category: string; confidence: number; reason: string }>; highEntropyCount: number } {
   const threats: Array<{ category: string; confidence: number; reason: string }> = [];
-  // Split into word-like tokens, check for suspiciously high entropy (possible base64/encoded payloads)
   const tokens = text.split(/\s+/).filter(t => t.length >= 16);
+  let highEntropyCount = 0;
   for (const token of tokens) {
     const e = shannonEntropy(token);
     if (e > 4.8 && token.length >= 20) {
+      highEntropyCount++;
       threats.push({ category: 'token_smuggling', confidence: 0.70, reason: `High-entropy token (possible encoded payload, entropy=${e.toFixed(2)})` });
     }
   }
-  return threats;
+  return { threats, highEntropyCount };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,13 +486,12 @@ function detectHighEntropyObfuscation(text: string): Array<{ category: string; c
 
 function detectNestedInjection(text: string): Array<{ category: string; confidence: number; reason: string }> {
   const threats: Array<{ category: string; confidence: number; reason: string }> = [];
-  // Try decoding embedded base64 blobs and scanning them
   const b64Matches = text.match(/[A-Za-z0-9+/]{24,}={0,2}/g) ?? [];
   for (const blob of b64Matches.slice(0, 5)) {
     try {
       const decoded = Buffer.from(blob, 'base64').toString('utf8');
-      if (/[a-z]{4,}/.test(decoded)) { // Looks like text
-        const norm = normalize(decoded);
+      if (/[a-z]{4,}/.test(decoded)) {
+        const norm = normalizeStr(decoded);
         for (const def of INPUT_PATTERNS) {
           if (def.pattern.test(norm)) {
             threats.push({ category: 'indirect_injection', confidence: Math.min(def.confidence * 0.9, 0.92), reason: `Encoded payload: ${def.reason}` });
@@ -290,7 +510,6 @@ function detectNestedInjection(text: string): Array<{ category: string; confiden
 
 function runPatterns(text: string, patterns: PatternDef[], preserveCase = false): Array<{ category: string; confidence: number; reason: string }> {
   const threats: Array<{ category: string; confidence: number; reason: string }> = [];
-  // Output patterns need original case preserved (API keys are case-sensitive)
   const variants = preserveCase ? [text] : makeVariants(text);
   for (const variant of variants) {
     for (const def of patterns) {
@@ -309,7 +528,6 @@ function computeAction(
 ): PolicyAction {
   if (allThreats.length === 0) return { action: 'allow', score: 0, reason: 'Clean' };
 
-  // Deduplicate by category, keeping highest confidence per category
   const byCat = new Map<string, { category: string; confidence: number; reason: string }>();
   for (const t of allThreats) {
     const existing = byCat.get(t.category);
@@ -318,7 +536,6 @@ function computeAction(
   const unique = [...byCat.values()];
 
   const maxConf = Math.max(...unique.map(t => t.confidence));
-  // Multi-category bonus: each additional category adds 5% up to 25%
   const multiBonus = Math.min((unique.length - 1) * 0.05, 0.25);
   const score = Math.min(maxConf + multiBonus, 1.0);
 
@@ -329,37 +546,79 @@ function computeAction(
   return { action, score: Math.round(score * 1000) / 1000, reason, threats: unique };
 }
 
-function advancedScan(text: string, blockThreshold = 0.70, alertThreshold = 0.35, isOutput = false): PolicyAction {
-  if (!text?.trim()) return { action: 'allow', score: 0 };
+interface AdvancedScanInternals {
+  result: PolicyAction;
+  normalizationApplied: string[];
+  normalized: string;
+  patternThreats: Array<{ category: string; confidence: number; reason: string }>;
+  semanticThreats: Array<{ category: string; confidence: number; reason: string }>;
+  highEntropyCount: number;
+  charSepDetected: boolean;
+  structuralScoreVal: number;
+}
 
+function advancedScanInternal(text: string, blockThreshold = 0.70, alertThreshold = 0.35, isOutput = false): AdvancedScanInternals {
+  if (!text?.trim()) {
+    return {
+      result: { action: 'allow', score: 0 },
+      normalizationApplied: [],
+      normalized: '',
+      patternThreats: [],
+      semanticThreats: [],
+      highEntropyCount: 0,
+      charSepDetected: false,
+      structuralScoreVal: 0,
+    };
+  }
+
+  const normResult = normalize(text);
   const patterns = isOutput ? OUTPUT_PATTERNS : INPUT_PATTERNS;
   const allThreats: Array<{ category: string; confidence: number; reason: string }> = [];
 
-  // Layer 1: Regex pattern matching (with normalisation variants)
-  // For output: preserve case so API key / secret regexes work correctly
-  allThreats.push(...runPatterns(text, patterns, isOutput));
+  const patternThreats = runPatterns(text, patterns, isOutput);
+  allThreats.push(...patternThreats);
 
-  // Layer 2: Semantic keyword groups (input only)
+  let semanticThreats: Array<{ category: string; confidence: number; reason: string }> = [];
+  let highEntropyCount = 0;
+  let charSepDetected = false;
+  let structuralScoreVal = 0;
+
   if (!isOutput) {
-    allThreats.push(...semanticScore(normalize(text)));
-  }
+    semanticThreats = semanticScore(normResult.result);
+    allThreats.push(...semanticThreats);
 
-  // Layer 3: Character-separation obfuscation
-  if (!isOutput && /\b\w([-._*\s])\w(\1\w){3,}\b/.test(text)) {
-    allThreats.push({ category: 'token_smuggling', confidence: 0.65, reason: 'Character-separated word obfuscation' });
-  }
+    charSepDetected = /\b\w([-._*\s])\w(\1\w){3,}\b/.test(text);
+    if (charSepDetected) {
+      allThreats.push({ category: 'token_smuggling', confidence: 0.65, reason: 'Character-separated word obfuscation' });
+    }
 
-  // Layer 4: High-entropy token detection (input only)
-  if (!isOutput) {
-    allThreats.push(...detectHighEntropyObfuscation(text));
-  }
+    const entropyResult = detectHighEntropyObfuscation(text);
+    highEntropyCount = entropyResult.highEntropyCount;
+    allThreats.push(...entropyResult.threats);
 
-  // Layer 5: Nested / encoded injection (input only)
-  if (!isOutput) {
     allThreats.push(...detectNestedInjection(text));
+
+    // Structural scoring
+    structuralScoreVal = structuralScore(text);
+    if (structuralScoreVal > 0.20) {
+      allThreats.push({ category: 'instruction_override', confidence: structuralScoreVal, reason: `Structural anomaly score: ${structuralScoreVal.toFixed(2)}` });
+    }
   }
 
-  return computeAction(allThreats, blockThreshold, alertThreshold);
+  return {
+    result: computeAction(allThreats, blockThreshold, alertThreshold),
+    normalizationApplied: normResult.applied,
+    normalized: normResult.result,
+    patternThreats,
+    semanticThreats,
+    highEntropyCount,
+    charSepDetected,
+    structuralScoreVal,
+  };
+}
+
+function advancedScan(text: string, blockThreshold = 0.70, alertThreshold = 0.35, isOutput = false): PolicyAction {
+  return advancedScanInternal(text, blockThreshold, alertThreshold, isOutput).result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -369,6 +628,13 @@ function advancedScan(text: string, blockThreshold = 0.70, alertThreshold = 0.35
 interface SessionState {
   turnThreats: Array<{ timestamp: number; score: number; category: string }>;
   velocityWindow: number[];
+  totalScans: number;
+  blockedCount: number;
+  alertCount: number;
+  firstSeen: number;
+  lastSeen: number;
+  threatCategories: Map<string, number>;
+  fingerprints: Map<string, number>;
 }
 
 class SessionTracker {
@@ -376,35 +642,102 @@ class SessionTracker {
 
   get(sessionId: string): SessionState {
     if (!this.sessions.has(sessionId)) {
-      this.sessions.set(sessionId, { turnThreats: [], velocityWindow: [] });
+      const now = Date.now();
+      this.sessions.set(sessionId, {
+        turnThreats: [],
+        velocityWindow: [],
+        totalScans: 0,
+        blockedCount: 0,
+        alertCount: 0,
+        firstSeen: now,
+        lastSeen: now,
+        threatCategories: new Map(),
+        fingerprints: new Map(),
+      });
     }
     return this.sessions.get(sessionId)!;
   }
 
-  /** Record a threat event for this session and return accumulated risk boost */
   record(sessionId: string, result: PolicyAction, windowMs: number): number {
     const state = this.get(sessionId);
     const now = Date.now();
+    state.lastSeen = now;
+    state.totalScans++;
 
-    // Velocity window cleanup
     state.velocityWindow = state.velocityWindow.filter(t => now - t < windowMs);
+
+    if (result.action === 'block') state.blockedCount++;
+    else if (result.action === 'alert') state.alertCount++;
+
+    if (result.threats) {
+      for (const t of result.threats) {
+        state.threatCategories.set(t.category, (state.threatCategories.get(t.category) ?? 0) + 1);
+      }
+    }
 
     if (result.action !== 'allow' && result.score! > 0) {
       state.velocityWindow.push(now);
       state.turnThreats.push({ timestamp: now, score: result.score!, category: result.threats?.[0]?.category ?? 'unknown' });
     }
 
-    // Keep only last 50 turns
     if (state.turnThreats.length > 50) state.turnThreats.splice(0, state.turnThreats.length - 50);
 
-    // Accumulated risk: sum of recent threat scores decayed by age
     const recentThreats = state.turnThreats.filter(t => now - t.timestamp < windowMs * 5);
     const accumulated = recentThreats.reduce((sum, t) => sum + t.score * 0.3, 0);
-    return Math.min(accumulated, 0.40); // cap boost at 40%
+    return Math.min(accumulated, 0.40);
+  }
+
+  recordFingerprint(sessionId: string, fp: string): { isNovel: boolean; count: number } {
+    if (!fp) return { isNovel: true, count: 0 };
+    const state = this.get(sessionId);
+    const count = state.fingerprints.get(fp) ?? 0;
+    state.fingerprints.set(fp, count + 1);
+    return { isNovel: count === 0, count };
   }
 
   velocityCount(sessionId: string): number {
     return this.get(sessionId).velocityWindow.length;
+  }
+
+  getSessionRisk(sessionId: string): SessionRiskProfile {
+    const state = this.get(sessionId);
+    const totalScans = state.totalScans;
+    const blockedCount = state.blockedCount;
+    const alertCount = state.alertCount;
+
+    let riskScore = 0;
+    if (totalScans > 0) {
+      riskScore = Math.min((blockedCount * 0.4 + alertCount * 0.15) / Math.max(totalScans, 1) * 3, 1.0);
+    }
+
+    const riskLevel: 'low' | 'medium' | 'high' | 'critical' =
+      riskScore >= 0.75 ? 'critical' :
+      riskScore >= 0.50 ? 'high' :
+      riskScore >= 0.25 ? 'medium' : 'low';
+
+    const topThreatCategories = [...state.threatCategories.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([cat]) => cat);
+
+    const recommendation =
+      riskLevel === 'critical' ? 'Immediately terminate this session. High attack frequency detected.' :
+      riskLevel === 'high' ? 'Consider terminating this session. Multiple threats detected.' :
+      riskLevel === 'medium' ? 'Monitor this session closely. Some suspicious activity detected.' :
+      'Session appears normal.';
+
+    return {
+      sessionId,
+      riskLevel,
+      totalScans,
+      blockedCount,
+      alertCount,
+      topThreatCategories,
+      firstSeen: state.firstSeen,
+      lastSeen: state.lastSeen,
+      riskScore: Math.round(riskScore * 1000) / 1000,
+      recommendation,
+    };
   }
 
   clear(sessionId: string): void {
@@ -423,6 +756,12 @@ export class AgentFortress {
   private sessionId: string;
   private tracker = new SessionTracker();
 
+  // Advanced features state
+  private customRules: CustomRule[] = [];
+  private toolPolicy: ToolPolicy | null = null;
+  private toolCallCount = 0;
+  private canaryTokens = new Map<string, string>(); // sessionId → token
+
   constructor(config: AgentFortressConfig = {}) {
     this.config = {
       apiKey: '',
@@ -436,6 +775,7 @@ export class AgentFortress {
       velocityWindowMs: 60_000,
       scanOutputs: true,
       blockMessage: '[AgentFortress] Input blocked: potential prompt injection or policy violation.',
+      shadowMode: false,
       ...config,
     };
     this.sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -468,8 +808,29 @@ export class AgentFortress {
       }
     }
 
+    // Add fingerprint and MITRE technique
+    if (result.threats && result.threats.length > 0) {
+      const fp = computeFingerprint(result.threats);
+      const { isNovel, count } = this.tracker.recordFingerprint(this.sessionId, fp);
+      result = {
+        ...result,
+        fingerprint: fp,
+        mitreTechnique: getMitreForThreats(result.threats),
+        isNovel,
+        similarAttackCount: count,
+      };
+    }
+
+    // Apply custom rules (can override in both directions)
+    result = this._applyCustomRules(result);
+
+    // Shadow mode: never actually block
+    if (this.config.shadowMode && (result.action === 'block' || result.action === 'alert')) {
+      result = { ...result, action: 'shadow_allow', isShadow: true };
+    }
+
     // Emit threat/audit events
-    if (result.action !== 'allow' && result.threats?.length) {
+    if (result.action !== 'allow' && result.action !== 'shadow_allow' && result.threats?.length) {
       const top = result.threats.sort((a, b) => b.confidence - a.confidence)[0];
       this._emitThreat({
         id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -481,27 +842,340 @@ export class AgentFortress {
       });
     }
 
-    this._emitAudit({ timestamp: Date.now(), sessionId: this.sessionId, direction, text, decision: result });
+    this._emitAudit({
+      timestamp: Date.now(),
+      sessionId: this.sessionId,
+      direction,
+      text,
+      decision: result,
+      isShadow: result.isShadow,
+      fingerprint: result.fingerprint,
+      mitreTechnique: result.mitreTechnique,
+    });
     this._log('debug', `[scan/${direction}] score=${result.score} action=${result.action} reason="${result.reason ?? 'none'}"`);
 
     return result;
   }
 
   /**
+   * Scan multiple segments with trust levels.
+   */
+  scanSegmented(segments: SegmentInput[]): SegmentedScanResult {
+    const results: SegmentResult[] = [];
+    let worstAction: 'allow' | 'block' | 'alert' | 'shadow_allow' = 'allow';
+    let worstScore = 0;
+    const allThreats: Array<{ category: string; confidence: number; reason: string }> = [];
+
+    for (const seg of segments) {
+      if (seg.trust === 'trusted') {
+        // Skip or lower threshold significantly
+        results.push({ segment: seg, decision: { action: 'allow', score: 0, reason: 'Trusted segment skipped' }, skipped: true });
+        continue;
+      }
+
+      let blockThreshold = this.config.blockThreshold;
+      let alertThreshold = this.config.alertThreshold;
+
+      if (seg.trust === 'external') {
+        // External content is MORE suspicious — lower thresholds
+        blockThreshold = 0.50;
+        alertThreshold = 0.25;
+      }
+
+      const result = advancedScan(seg.text, blockThreshold, alertThreshold, false);
+      results.push({ segment: seg, decision: result });
+
+      if (result.score! > worstScore) worstScore = result.score!;
+      if (result.action === 'block') worstAction = 'block';
+      else if (result.action === 'alert' && worstAction !== 'block') worstAction = 'alert';
+
+      if (result.threats) allThreats.push(...result.threats);
+    }
+
+    const overall: PolicyAction = {
+      action: worstAction,
+      score: Math.round(worstScore * 1000) / 1000,
+      threats: allThreats.length > 0 ? allThreats : undefined,
+      reason: worstAction !== 'allow' ? `Worst segment: ${worstAction}` : 'All segments clean',
+    };
+
+    return { segments: results, overall };
+  }
+
+  /**
+   * Generate a canary token to embed in system prompt.
+   */
+  generateCanaryToken(sessionId?: string): string {
+    const sid = sessionId ?? this.sessionId;
+    const entropy = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    const tokenHash = simpleHash(entropy).slice(0, 8);
+    const token = `[CANARY:${tokenHash}:${sid.slice(0, 12)}]`;
+    this.canaryTokens.set(sid, token);
+    return token;
+  }
+
+  /**
+   * Check if agent output contains a leaked canary token.
+   */
+  checkCanaryLeak(outputText: string, sessionId?: string): boolean {
+    const sid = sessionId ?? this.sessionId;
+    const token = this.canaryTokens.get(sid);
+    if (!token) return false;
+    return outputText.includes(token);
+  }
+
+  /**
+   * Redact sensitive information from text.
+   */
+  redact(text: string): RedactionResult {
+    const findings: RedactionFinding[] = [];
+    let result = text;
+    let offset = 0;
+
+    // We process replacements in order to avoid overlapping issues
+    const replacements: Array<{ start: number; end: number; replacement: string; type: RedactionFinding['type']; original: string }> = [];
+
+    const addMatches = (re: RegExp, type: RedactionFinding['type'], replacement: string) => {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        replacements.push({ start: m.index, end: m.index + m[0].length, replacement, type, original: m[0] });
+      }
+    };
+
+    // Order matters: more specific first
+    addMatches(/\b(sk-[a-zA-Z0-9-]{20,}|AIza[0-9A-Za-z\-_]{35}|xoxb-[0-9]{11}-[0-9]{11}-[a-zA-Z0-9]{24})\b/g, 'api_key', '[API_KEY_REDACTED]');
+    addMatches(/\b(AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{20,}|ghs_[a-zA-Z0-9]{20,})\b/g, 'secret_token', '[SECRET_TOKEN_REDACTED]');
+    addMatches(/\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11})\b/g, 'credit_card', '[CREDIT_CARD_REDACTED]');
+    addMatches(/\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b/g, 'ssn', '[SSN_REDACTED]');
+    addMatches(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/g, 'email', '[EMAIL_REDACTED]');
+
+    // Sort by start index, remove overlapping (keep first)
+    replacements.sort((a, b) => a.start - b.start);
+    const nonOverlapping: typeof replacements = [];
+    let lastEnd = -1;
+    for (const r of replacements) {
+      if (r.start >= lastEnd) {
+        nonOverlapping.push(r);
+        lastEnd = r.end;
+      }
+    }
+
+    // Build result string
+    let out = '';
+    let cursor = 0;
+    for (const r of nonOverlapping) {
+      out += text.slice(cursor, r.start);
+      findings.push({ type: r.type, original: r.original, replacement: r.replacement, index: r.start + offset });
+      out += r.replacement;
+      offset += r.replacement.length - r.original.length;
+      cursor = r.end;
+    }
+    out += text.slice(cursor);
+
+    return { redacted: out, findings };
+  }
+
+  /**
+   * Add a custom policy rule that can override scanner decisions.
+   */
+  addRule(rule: CustomRule): this {
+    this.customRules.push(rule);
+    return this;
+  }
+
+  /**
+   * Remove a custom rule by ID.
+   */
+  removeRule(id: string): this {
+    this.customRules = this.customRules.filter(r => r.id !== id);
+    return this;
+  }
+
+  /**
+   * Set the tool call policy.
+   */
+  setToolPolicy(policy: ToolPolicy): this {
+    this.toolPolicy = policy;
+    this.toolCallCount = 0;
+    return this;
+  }
+
+  /**
+   * Check if a tool call is allowed.
+   */
+  checkToolCall(toolName: string, args?: Record<string, unknown>): ToolCallDecision {
+    const policy = this.toolPolicy;
+
+    if (!policy) {
+      return { action: 'allow', reason: 'No tool policy configured' };
+    }
+
+    // Deny list check
+    if (policy.denyList && policy.denyList.includes(toolName)) {
+      return { action: 'block', reason: `Tool ${toolName} is in deny list` };
+    }
+
+    // Allow list check (if defined, only allow listed tools)
+    if (policy.allowList && policy.allowList.length > 0 && !policy.allowList.includes(toolName)) {
+      return { action: 'block', reason: `Tool ${toolName} is not in allow list` };
+    }
+
+    // Max calls per turn
+    this.toolCallCount++;
+    if (policy.maxCallsPerTurn !== undefined && this.toolCallCount > policy.maxCallsPerTurn) {
+      return { action: 'block', reason: `Max tool calls per turn (${policy.maxCallsPerTurn}) exceeded` };
+    }
+
+    // Require approval check
+    if (policy.requireApproval && policy.requireApproval.includes(toolName)) {
+      return { action: 'require_approval', reason: `Tool ${toolName} requires approval` };
+    }
+
+    // Scan args for suspicious content
+    if (args) {
+      const argText = Object.values(args).filter(v => typeof v === 'string').join(' ');
+      if (argText) {
+        const result = advancedScan(argText, this.config.blockThreshold, this.config.alertThreshold, false);
+        if (result.action === 'block' || result.action === 'alert') {
+          return { action: 'alert', reason: `Tool call contains suspicious content` };
+        }
+      }
+    }
+
+    return { action: 'allow', reason: `Tool ${toolName} is allowed` };
+  }
+
+  /**
+   * Scan RAG/retrieved context for poisoned chunks.
+   */
+  scanContext(input: ContextScanInput): ContextScanResult {
+    const poisonedChunks: PoisonedChunkResult[] = [];
+    let overallDecision: 'allow' | 'block' | 'alert' = 'allow';
+
+    // External content is more suspicious — lower thresholds
+    const blockThreshold = 0.50;
+    const alertThreshold = 0.25;
+
+    if (input.retrievedChunks) {
+      for (const chunk of input.retrievedChunks) {
+        const result = advancedScan(chunk.content, blockThreshold, alertThreshold, false);
+        if (result.action !== 'allow') {
+          poisonedChunks.push({ ...chunk, decision: result });
+          if (result.action === 'block') overallDecision = 'block';
+          else if (result.action === 'alert' && overallDecision !== 'block') overallDecision = 'alert';
+        }
+      }
+    }
+
+    // Also scan user message with normal thresholds
+    if (input.userMessage) {
+      const userResult = advancedScan(input.userMessage, this.config.blockThreshold, this.config.alertThreshold, false);
+      if (userResult.action === 'block') overallDecision = 'block';
+      else if (userResult.action === 'alert' && overallDecision !== 'block') overallDecision = 'alert';
+    }
+
+    return {
+      clean: poisonedChunks.length === 0,
+      poisonedChunks,
+      decision: overallDecision,
+    };
+  }
+
+  /**
+   * Detailed scan with full layer breakdown and MITRE mapping.
+   */
+  scanDetailed(text: string): DetailedScanReport {
+    const internals = advancedScanInternal(text, this.config.blockThreshold, this.config.alertThreshold, false);
+    let result = internals.result;
+
+    // Session context boost
+    const accumulatedBoost = this.tracker.record(this.sessionId, result, this.config.velocityWindowMs);
+    const priorThreats = this.tracker.get(this.sessionId).turnThreats.length;
+    if (accumulatedBoost > 0 && result.score! > 0) {
+      const boostedScore = Math.min(result.score! + accumulatedBoost, 1.0);
+      const newAction = boostedScore >= this.config.blockThreshold ? 'block' : boostedScore >= this.config.alertThreshold ? 'alert' : result.action;
+      result = { ...result, score: Math.round(boostedScore * 1000) / 1000, action: newAction };
+    }
+
+    // Velocity
+    const velocityCount = this.tracker.velocityCount(this.sessionId);
+    const velocityTriggered = velocityCount >= this.config.velocityLimit;
+
+    // Fingerprint
+    const fp = result.threats ? computeFingerprint(result.threats) : '';
+    const { isNovel, count } = fp ? this.tracker.recordFingerprint(this.sessionId, fp) : { isNovel: true, count: 0 };
+
+    // Custom rules
+    const customRuleResults: Array<{ ruleId: string; applied: boolean; action?: string }> = [];
+    for (const rule of this.customRules) {
+      const applies = rule.condition(result);
+      customRuleResults.push({ ruleId: rule.id, applied: applies, action: applies ? rule.action : undefined });
+    }
+    result = this._applyCustomRules(result);
+
+    // Shadow mode
+    if (this.config.shadowMode && (result.action === 'block' || result.action === 'alert')) {
+      result = { ...result, action: 'shadow_allow', isShadow: true };
+    }
+
+    const mitreTechnique = result.threats ? getMitreForThreats(result.threats) : '';
+    const score = result.score ?? 0;
+
+    const recommendation =
+      result.action === 'block' || result.action === 'shadow_allow' && score >= this.config.blockThreshold
+        ? `Block this request. High-confidence ${result.threats?.[0]?.category ?? 'threat'} attempt.`
+        : result.action === 'alert'
+        ? `Alert: suspicious content detected. Review before allowing.`
+        : 'Request appears clean. Allow.';
+
+    return {
+      ...result,
+      fingerprint: fp,
+      isNovel,
+      similarAttackCount: count,
+      mitreTechnique,
+      layers: {
+        normalization: {
+          applied: internals.normalizationApplied,
+          normalized: internals.normalized,
+        },
+        patterns: internals.patternThreats,
+        semantic: internals.semanticThreats.map(t => ({ category: t.category, confidence: t.confidence })),
+        structural: {
+          charSepDetected: internals.charSepDetected,
+          highEntropyTokens: internals.highEntropyCount,
+          structuralScore: internals.structuralScoreVal,
+        },
+        sessionContext: {
+          boost: accumulatedBoost,
+          priorThreats,
+        },
+        velocity: {
+          count: velocityCount,
+          limit: this.config.velocityLimit,
+          triggered: velocityTriggered,
+        },
+        customRules: customRuleResults,
+      },
+      recommendation,
+    };
+  }
+
+  /**
+   * Get session risk profile.
+   */
+  getSessionRisk(sessionId?: string): SessionRiskProfile {
+    const sid = sessionId ?? this.sessionId;
+    return this.tracker.getSessionRisk(sid);
+  }
+
+  /**
    * Wrap an agent function with pre-call input scanning AND optional post-call output scanning.
-   *
-   * ⚠️ FIX: Previously protect() only caught JS errors — it never scanned inputs.
-   *         Now it extracts ALL string arguments, scans them BEFORE calling the agent,
-   *         and blocks execution if any argument exceeds the threat threshold.
-   *
-   * @param agent - The agent function to wrap
-   * @param agentId - Optional identifier for logging/audit
-   * @returns Wrapped function that enforces security policy
    */
   protect<T extends (...args: unknown[]) => unknown>(agent: T, agentId?: string): T {
     const self = this;
     return (async (...args: unknown[]) => {
-      // ── Step 1: Extract and scan all string inputs ──────────────────────
       const stringArgs = self._extractStrings(args);
       for (const text of stringArgs) {
         if (!text.trim()) continue;
@@ -528,12 +1202,10 @@ export class AgentFortress {
         }
       }
 
-      // ── Step 2: Execute the agent ────────────────────────────────────────
       self._log('info', `Agent ${agentId ?? 'unknown'} invoked`);
       let output: unknown;
       try {
         output = agent(...args);
-        // Await if the agent returns a Promise
         if (output instanceof Promise) output = await output;
       } catch (error) {
         self._emitThreat({
@@ -548,7 +1220,6 @@ export class AgentFortress {
         throw error;
       }
 
-      // ── Step 3: Scan output for sensitive data leakage ───────────────────
       if (self.config.scanOutputs && typeof output === 'string' && output.trim()) {
         const outputResult = self.scan(output, 'output');
         if (outputResult.action !== 'allow') {
@@ -570,7 +1241,6 @@ export class AgentFortress {
 
   /**
    * Register an audit handler (called for every scan — allow, alert, or block).
-   * Use this for full audit trails / SIEM integration.
    */
   onAudit(handler: AuditHandler): this {
     this.auditHandlers.push(handler);
@@ -580,7 +1250,7 @@ export class AgentFortress {
   getSessionId(): string { return this.sessionId; }
 
   /**
-   * Reset session threat accumulator (e.g. after user re-authentication).
+   * Reset session threat accumulator.
    */
   resetSession(): void {
     this.tracker.clear(this.sessionId);
@@ -596,7 +1266,16 @@ export class AgentFortress {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  /** Recursively extract all string values from args (handles arrays, objects, nested) */
+  private _applyCustomRules(result: PolicyAction): PolicyAction {
+    for (const rule of this.customRules) {
+      if (rule.condition(result)) {
+        return { ...result, action: rule.action, reason: rule.reason };
+      }
+    }
+    return result;
+  }
+
+  /** Recursively extract all string values from args */
   private _extractStrings(value: unknown, depth = 0): string[] {
     if (depth > 5) return [];
     if (typeof value === 'string') return [value];
