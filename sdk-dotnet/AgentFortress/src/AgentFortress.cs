@@ -151,6 +151,10 @@ namespace AgentFortress
             new(@"\b(btw|ps|p\.s\.|also|anyway|oh\s+and|by\s+the\s+way)\b.{0,20}\b(ignore|forget|disregard|bypass)\b", "instruction_override", 0.80, "Soft bypass: btw/also + override"),
             new(@"\b(ignore\s+the\s+above|ignore\s+everything\s+above|from\s+now\s+on)\b", "instruction_override", 0.90, "Classic ignore-above injection"),
             new(@"\b(whatever\s+you\s+do|don.t)\b.{0,30}\b(follow|obey|listen\s+to|comply)\b.{0,30}\b(instructions?|rules?|guidelines?)", "instruction_override", 0.80, "Reverse psychology override"),
+            new(@"\b(your\s+(real|actual|true)\s+instructions?\s+(are|follow)|actual\s+instructions?\s+are)", "instruction_override", 0.88, "Real/actual instructions injection"),
+            new(@"(?m)^\s*(SYSTEM\s*:\s*|USER\s*:\s*|ASSISTANT\s*:\s*)", "prompt_injection", 0.88, "Role prefix injection (SYSTEM/USER/ASSISTANT)"),
+            new("[\u202E\u202D\u202C\u202B\u202A\u200F\u200E]", "token_smuggling", 0.85, "Unicode RTL/bidirectional override character"),
+            new(@"(ignorez\s+toutes\s+les\s+instructions|ignoriere\s+alle\s+(vorherigen\s+)?anweisungen|ignora\s+todas\s+las\s+instrucciones)", "instruction_override", 0.90, "Multi-language injection (FR/DE/ES)"),
             // Jailbreak
             new(@"\bDAN\b.{0,100}(do\s*anything\s*now|without\s+restrictions?|no\s+restrictions?)", "jailbreak", 0.98, "DAN jailbreak"),
             new(@"\bjailbreak(ed)?\b", "jailbreak", 0.90, "Explicit jailbreak"),

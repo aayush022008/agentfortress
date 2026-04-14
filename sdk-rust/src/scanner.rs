@@ -95,6 +95,14 @@ const INPUT_PATTERNS: &[ScanPattern] = &[
         re: r"(?i)\b(ignore\s+the\s+above|ignore\s+everything\s+above|from\s+now\s+on)\b" },
     ScanPattern { name: "reverse_psychology", confidence: 0.85,
         re: r"(?i)\bwhatever\s+you\s+do\b.{0,30}\b(don.t|do\s+not)\b.{0,30}\b(follow|obey)\b.{0,30}\b(instructions?|rules?)" },
+    ScanPattern { name: "real_instructions", confidence: 0.88,
+        re: r"(?i)\b(your\s+(real|actual|true)\s+instructions?\s+(are|follow)|actual\s+instructions?\s+are)" },
+    ScanPattern { name: "role_prefix_injection", confidence: 0.88,
+        re: r"(?im)^\s*(SYSTEM\s*:\s*|USER\s*:\s*|ASSISTANT\s*:\s*)" },
+    ScanPattern { name: "rtl_override", confidence: 0.85,
+        re: r"[\u{202E}\u{202D}\u{202C}\u{202B}\u{202A}\u{200F}\u{200E}]" },
+    ScanPattern { name: "multilang_injection", confidence: 0.90,
+        re: r"(?i)(ignorez\s+toutes\s+les\s+instructions|ignoriere\s+alle\s+(vorherigen\s+)?anweisungen|ignora\s+todas\s+las\s+instrucciones)" },
 ];
 
 const OUTPUT_PATTERNS: &[ScanPattern] = &[

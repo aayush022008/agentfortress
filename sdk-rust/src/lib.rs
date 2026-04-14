@@ -182,29 +182,22 @@ impl AgentFortress {
     }
 
     /// Wrap a closure with input scanning before execution and output scanning after
-    pub fn protect<F, R>(&self, f: F, input: &str, agent_id: Option<&str>) -> Result<R, String>
+    pub fn protect<F>(&self, f: F, input: &str, agent_id: Option<&str>) -> Result<String, String>
     where
-        F: FnOnce() -> R,
-        R: ToString,
+        F: FnOnce() -> String,
     {
         // Scan input
         let input_result = self.scan(input, "input");
         if input_result.action == PolicyActionKind::Block {
-            if self.config.throw_on_block {
-                return Err(self.config.block_message.clone());
-            }
-            return Ok(unsafe { std::mem::zeroed() }); // won't reach due to Err above typically
+            return Err(self.config.block_message.clone());
         }
 
         // Execute
         let output = f();
 
         // Scan output
-        if self.config.scan_outputs {
-            let out_str = output.to_string();
-            if !out_str.is_empty() {
-                self.scan(&out_str, "output");
-            }
+        if self.config.scan_outputs && !output.is_empty() {
+            self.scan(&output, "output");
         }
 
         Ok(output)

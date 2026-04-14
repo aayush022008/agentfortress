@@ -251,6 +251,21 @@ var inputPatterns = []scanPattern{
 	// Reverse psychology
 	{name: "reverse_psychology", confidence: 0.85,
 		re: regexp.MustCompile(`(?i)\bwhatever\s+you\s+do\b.{0,30}\b(don.t|do\s+not)\b.{0,30}\b(follow|obey)\b.{0,30}\b(instructions?|rules?)`)},
+	// Real/actual instructions injection
+	{name: "instruction_override", confidence: 0.88,
+		re: regexp.MustCompile(`(?i)\b(your\s+(real|actual|true)\s+instructions?\s+(are|follow)|actual\s+instructions?\s+are)`)},
+	// SYSTEM:/USER:/ASSISTANT: prefix injection
+	{name: "prompt_injection", confidence: 0.88,
+		re: regexp.MustCompile(`(?im)^\s*(SYSTEM\s*:\s*|USER\s*:\s*|ASSISTANT\s*:\s*)`)},
+	// Unicode RTL override
+	{name: "token_smuggling", confidence: 0.85,
+		re: regexp.MustCompile(`[\x{202E}\x{202D}\x{202C}\x{202B}\x{202A}\x{200F}\x{200E}]`)},
+	// Null byte injection
+	{name: "token_smuggling", confidence: 0.80,
+		re: regexp.MustCompile(`\x00`)},
+	// Multi-language injections
+	{name: "instruction_override", confidence: 0.90,
+		re: regexp.MustCompile(`(?i)(ignorez\s+toutes\s+les\s+instructions|ignoriere\s+alle\s+(vorherigen\s+)?anweisungen|ignora\s+todas\s+las\s+instrucciones)`)},
 }
 
 var outputPatterns = []scanPattern{

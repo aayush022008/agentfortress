@@ -201,7 +201,7 @@ THREAT_PATTERNS: list[tuple[ThreatCategory, float, re.Pattern, str]] = [
      "Override/replace instructions"),
 
     (ThreatCategory.INSTRUCTION_OVERRIDE, 0.88,
-     _f(r'\bforget\b.{0,20}\b(everything|all|what)\b'),
+     _f(r'\bforget\b.{0,20}\b(everything|all)\b'),
      "Forget everything instruction override"),
 
     (ThreatCategory.INSTRUCTION_OVERRIDE, 0.82,
@@ -379,6 +379,36 @@ THREAT_PATTERNS: list[tuple[ThreatCategory, float, re.Pattern, str]] = [
      _f(r'\b(ignore\s+the\s+above|ignore\s+everything\s+above|from\s+now\s+on)\b'),
      "Classic ignore-the-above"),
 
+    # ── Missing patterns: real/actual instructions injection ──────────────────
+    (ThreatCategory.INSTRUCTION_OVERRIDE, 0.88,
+     _f(r'\b(your\s+(real|actual|true)\s+instructions?\s+(are|follow)|actual\s+instructions?\s+are:?)'),
+     "Your real/actual instructions injection"),
+
+    # ── SYSTEM:/USER:/ASSISTANT: prefix injection ─────────────────────────────
+    (ThreatCategory.PROMPT_INJECTION, 0.88,
+     _f(r'(?:^|\n)\s*(SYSTEM\s*:\s*|USER\s*:\s*|ASSISTANT\s*:\s*)'),
+     "Role prefix injection (SYSTEM/USER/ASSISTANT)"),
+
+    # ── Unicode RTL override ──────────────────────────────────────────────────
+    (ThreatCategory.TOKEN_SMUGGLING, 0.85,
+     _f(r'[\u202e\u202d\u202c\u202b\u202a\u200f\u200e]'),
+     "Unicode bidirectional/RTL override character"),
+
+    # ── Null byte injection ───────────────────────────────────────────────────
+    (ThreatCategory.TOKEN_SMUGGLING, 0.80,
+     _f(r'\x00'),
+     "Null byte injection"),
+
+    # ── Repetition attack (same injection phrase repeated 3+ times) ──────────
+    (ThreatCategory.INSTRUCTION_OVERRIDE, 0.82,
+     _f(r'(ignore\s+(all\s+)?previous\s+instructions.{0,20}){3,}'),
+     "Repetition amplification attack"),
+
+    # ── Multi-language injections ─────────────────────────────────────────────
+    (ThreatCategory.INSTRUCTION_OVERRIDE, 0.90,
+     _f(r'(ignorez\s+toutes\s+les\s+instructions|ignoriere\s+alle\s+(vorherigen\s+)?anweisungen|ignora\s+todas\s+las\s+instrucciones|игнорируй\s+все\s+(предыдущие\s+)?инструкции)'),
+     "Multi-language injection (FR/DE/ES/RU)"),
+
     # ── Reverse-psychology overrides ──────────────────────────────────────────
     (ThreatCategory.INSTRUCTION_OVERRIDE, 0.85,
      _f(r'\bwhatever\s+you\s+do\b.{0,30}\b(don.t|do\s+not)\b.{0,30}\b(follow|obey|comply\s+with)\b.{0,30}\b(your\s+)?(instructions?|rules?|guidelines?|training)'),
@@ -407,11 +437,13 @@ THREAT_PATTERNS: list[tuple[ThreatCategory, float, re.Pattern, str]] = [
 
 # Each entry: (keyword_set, weight, category, reason)
 _SEMANTIC_GROUPS: list[tuple[list[str], float, ThreatCategory, str]] = [
-    # Ignore/override synonyms — single hit weight raised to 0.60 so score=0.36 → alert
+    # Ignore/override synonyms — require 2+ related keywords for high confidence;
+    # single hit weight deliberately kept low (0.45 * 0.6 = 0.27) to avoid false positives
+    # from benign usage like "reset my password" or "ignore null values"
     (["ignore", "disregard", "forget", "override", "bypass", "dismiss",
       "cancel", "nullify", "void", "erase", "clear", "reset", "undo",
       "revoke", "rescind", "annul", "neutralize", "negate"],
-     0.60, ThreatCategory.INSTRUCTION_OVERRIDE, "Override verb detected"),
+     0.45, ThreatCategory.INSTRUCTION_OVERRIDE, "Override verb detected"),
 
     # Instructions synonyms
     (["instructions", "rules", "guidelines", "constraints", "directives",

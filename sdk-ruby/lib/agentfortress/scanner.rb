@@ -51,6 +51,16 @@ module AgentFortress
         re: /\b(ignore\s+the\s+above|ignore\s+everything\s+above|from\s+now\s+on)\b/i },
       { name: :reverse_psychology, confidence: 0.85,
         re: /\bwhatever\s+you\s+do\b.{0,30}\b(don.t|do\s+not)\b.{0,30}\b(follow|obey)\b.{0,30}\b(instructions?|rules?)/i },
+      { name: :real_instructions, confidence: 0.88,
+        re: /\b(your\s+(real|actual|true)\s+instructions?\s+(are|follow)|actual\s+instructions?\s+are)/i },
+      { name: :role_prefix_injection, confidence: 0.88,
+        re: /^\s*(SYSTEM\s*:\s*|USER\s*:\s*|ASSISTANT\s*:\s*)/im },
+      { name: :rtl_override, confidence: 0.85,
+        re: /[\u202E\u202D\u202C\u202B\u202A\u200F\u200E]/ },
+      { name: :null_byte, confidence: 0.80,
+        re: /\x00/ },
+      { name: :multilang_injection, confidence: 0.90,
+        re: /(ignorez\s+toutes\s+les\s+instructions|ignoriere\s+alle\s+(vorherigen\s+)?anweisungen|ignora\s+todas\s+las\s+instrucciones)/i },
     ].freeze
 
     OUTPUT_PATTERNS = [
