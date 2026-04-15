@@ -23,12 +23,14 @@ pub mod policies;
 pub mod guardian;
 pub mod vault;
 pub mod threatintel;
+pub mod extras;
 
 pub use scanner::Scanner;
 pub use models::{ThreatEvent, PolicyAction, ThreatSeverity, PolicyActionKind, AuditRecord};
 pub use guardian::{Guardian, ResponseAction, ThreatLevel, PlaybookRule, ResponseRecord, SessionStatus};
 pub use vault::{Vault, SecretEntry, VaultToken};
 pub use threatintel::{ThreatIntelDB, IOC, IOCType, IOCMatch};
+pub use extras::{ChainGuard, BehavioralAnalyzer, Redactor, RateLimiter, ContextAnalyzer, MetricsCollector, RealTimeFeed, ExplainerRust, RustSelfTester};
 
 pub const VERSION: &str = "3.0.0";
 

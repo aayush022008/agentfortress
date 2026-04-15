@@ -302,6 +302,18 @@ namespace AgentFortress
         public BehavioralAnalyzer BehavioralAnalyzer { get; }
         /// <summary>Decision explainer and compliance reporter.</summary>
         public Explainer Explainer { get; }
+        /// <summary>Multi-agent trust chain guard.</summary>
+        public ChainGuard ChainGuard { get; } = new ChainGuard();
+        /// <summary>PII and secret redactor.</summary>
+        public Redactor Redactor { get; } = new Redactor();
+        /// <summary>Sliding-window rate limiter.</summary>
+        public RateLimiter RateLimiter { get; } = new RateLimiter();
+        /// <summary>Conversation context threat analyzer.</summary>
+        public ContextAnalyzer ContextAnalyzer { get; } = new ContextAnalyzer();
+        /// <summary>Prometheus-compatible metrics collector.</summary>
+        public MetricsCollector Metrics { get; } = MetricsCollector.GetInstance();
+        /// <summary>Real-time threat alert feed.</summary>
+        public RealTimeFeed RealtimeFeed { get; } = new RealTimeFeed();
 
         public AgentFortressShield(AgentFortressConfig? config = null)
         {

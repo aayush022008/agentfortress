@@ -102,7 +102,7 @@ export interface RedactionFinding {
   index: number;
 }
 
-export interface RedactionResult {
+export interface LegacyRedactionResult {
   redacted: string;
   findings: RedactionFinding[];
 }
@@ -770,6 +770,13 @@ export class AgentFortress {
   public threatIntel = new ThreatIntelDB();
   public explainer = new Explainer();
 
+  // New feature additions
+  public redactor!: Redactor;
+  public rateLimiter!: RateLimiter;
+  public contextAnalyzer!: ContextAnalyzer;
+  public metrics!: MetricsCollector;
+  public realtimeFeed!: RealTimeFeed;
+
   constructor(config: AgentFortressConfig = {}) {
     this.config = {
       apiKey: '',
@@ -787,6 +794,11 @@ export class AgentFortress {
       ...config,
     };
     this.sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    this.redactor = new Redactor();
+    this.rateLimiter = new RateLimiter();
+    this.contextAnalyzer = new ContextAnalyzer();
+    this.metrics = MetricsCollector.getInstance();
+    this.realtimeFeed = new RealTimeFeed();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -935,7 +947,7 @@ export class AgentFortress {
   /**
    * Redact sensitive information from text.
    */
-  redact(text: string): RedactionResult {
+  redact(text: string): LegacyRedactionResult {
     const findings: RedactionFinding[] = [];
     let result = text;
     let offset = 0;
@@ -2110,3 +2122,539 @@ export function protect<T extends (...args: unknown[]) => unknown>(agent: T, age
 }
 
 export default { AgentFortress, init, getInstance, scan, protect };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Redactor — PII/Secret Redaction
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RedactionCategory = 'ssn' | 'credit_card' | 'email' | 'phone' | 'api_key' | 'ip_address' | 'jwt_token' | 'private_key' | 'custom';
+
+export interface RedactionEntry {
+  category: RedactionCategory;
+  originalPreview: string;
+  placeholder: string;
+  count: number;
+}
+
+export interface RedactionResult {
+  redactedText: string;
+  redactionCount: number;
+  categoriesFound: RedactionCategory[];
+  entries: RedactionEntry[];
+}
+
+export interface RedactionConfig {
+  redactPii?: boolean;
+  redactSecrets?: boolean;
+  placeholder?: string;
+  useCategoryLabels?: boolean;
+  customPatterns?: Array<{ name: string; pattern: string }>;
+}
+
+interface BuiltinPattern {
+  category: RedactionCategory;
+  pattern: RegExp;
+}
+
+export class Redactor {
+  private config: Required<RedactionConfig>;
+  private builtinPatterns: BuiltinPattern[];
+  private customPatterns: Array<{ name: string; pattern: RegExp; category: RedactionCategory }> = [];
+
+  constructor(config?: RedactionConfig) {
+    this.config = {
+      redactPii: true,
+      redactSecrets: true,
+      placeholder: '[REDACTED]',
+      useCategoryLabels: true,
+      customPatterns: [],
+      ...config,
+    };
+    this.builtinPatterns = [
+      { category: 'ssn', pattern: /\b\d{3}-\d{2}-\d{4}\b/g },
+      { category: 'credit_card', pattern: /\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\b/g },
+      { category: 'email', pattern: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g },
+      { category: 'phone', pattern: /\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b/g },
+      { category: 'api_key', pattern: /\b(sk-[A-Za-z0-9\-]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36,}|AIza[0-9A-Za-z\-_]{35})\b/g },
+      { category: 'ip_address', pattern: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g },
+      { category: 'jwt_token', pattern: /\beyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_.+\/=]*\b/g },
+    ];
+    for (const cp of this.config.customPatterns) {
+      this.addCustomPattern(cp.name, cp.pattern);
+    }
+  }
+
+  addCustomPattern(name: string, pattern: string): void {
+    this.customPatterns.push({ name, pattern: new RegExp(pattern, 'g'), category: 'custom' });
+  }
+
+  redact(text: string): RedactionResult {
+    const entryCounts = new Map<string, { entry: RedactionEntry; count: number }>();
+    let redactedText = text;
+    let redactionCount = 0;
+    const categoriesFound = new Set<RedactionCategory>();
+
+    const piiCategories: RedactionCategory[] = ['ssn', 'credit_card', 'email', 'phone', 'ip_address'];
+    const secretCategories: RedactionCategory[] = ['api_key', 'jwt_token', 'private_key'];
+
+    const allPatterns: Array<{ category: RedactionCategory; pattern: RegExp }> = [];
+    for (const bp of this.builtinPatterns) {
+      if (piiCategories.includes(bp.category) && !this.config.redactPii) continue;
+      if (secretCategories.includes(bp.category) && !this.config.redactSecrets) continue;
+      allPatterns.push(bp);
+    }
+    for (const cp of this.customPatterns) {
+      allPatterns.push({ category: cp.category, pattern: cp.pattern });
+    }
+
+    for (const { category, pattern } of allPatterns) {
+      pattern.lastIndex = 0;
+      const label = this.config.useCategoryLabels ? `[${category.toUpperCase()}]` : this.config.placeholder;
+      let result = redactedText;
+      let match: RegExpExecArray | null;
+      const tempPattern = new RegExp(pattern.source, pattern.flags);
+      while ((match = tempPattern.exec(redactedText)) !== null) {
+        const original = match[0];
+        const preview = original.slice(0, 4) + '***';
+        const key = `${category}:${preview}`;
+        if (!entryCounts.has(key)) {
+          entryCounts.set(key, {
+            entry: { category, originalPreview: preview, placeholder: label, count: 0 },
+            count: 0,
+          });
+        }
+        entryCounts.get(key)!.count++;
+        redactionCount++;
+        categoriesFound.add(category);
+      }
+      redactedText = redactedText.replace(new RegExp(pattern.source, pattern.flags), label);
+    }
+
+    const entries: RedactionEntry[] = [...entryCounts.values()].map(ec => ({ ...ec.entry, count: ec.count }));
+    return {
+      redactedText,
+      redactionCount,
+      categoriesFound: [...categoriesFound],
+      entries,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: RateLimiter — Sliding Window Rate Limiter
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RateLimitConfig {
+  requestsPerMinute?: number;
+  burstMultiplier?: number;
+  windowSeconds?: number;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  retryAfterSeconds: number;
+  reason: string;
+  currentCount: number;
+  limit: number;
+}
+
+export class RateLimiter {
+  private config: Required<RateLimitConfig>;
+  private windows: Map<string, number[]> = new Map();
+
+  constructor(config?: RateLimitConfig) {
+    this.config = {
+      requestsPerMinute: 60,
+      burstMultiplier: 1.5,
+      windowSeconds: 60,
+      ...config,
+    };
+  }
+
+  checkAndConsume(sessionId: string, agentName?: string, tokens = 1): RateLimitResult {
+    const windowMs = this.config.windowSeconds * 1000;
+    const limit = Math.floor(this.config.requestsPerMinute * this.config.burstMultiplier);
+    const now = Date.now();
+
+    const keys = [sessionId];
+    if (agentName) keys.push(agentName);
+
+    for (const key of keys) {
+      if (!this.windows.has(key)) this.windows.set(key, []);
+      const timestamps = this.windows.get(key)!;
+      // Cleanup outside window
+      const valid = timestamps.filter(t => now - t < windowMs);
+      this.windows.set(key, valid);
+
+      const currentCount = valid.length;
+      if (currentCount + tokens > limit) {
+        const oldest = valid[0] ?? now;
+        const retryAfterSeconds = Math.ceil((oldest + windowMs - now) / 1000);
+        return {
+          allowed: false,
+          retryAfterSeconds: Math.max(0, retryAfterSeconds),
+          reason: `Rate limit exceeded for key: ${key}`,
+          currentCount,
+          limit,
+        };
+      }
+    }
+
+    // Consume tokens
+    for (const key of keys) {
+      const timestamps = this.windows.get(key)!;
+      for (let i = 0; i < tokens; i++) timestamps.push(now);
+    }
+
+    return {
+      allowed: true,
+      retryAfterSeconds: 0,
+      reason: 'Request allowed',
+      currentCount: (this.windows.get(sessionId) ?? []).length,
+      limit,
+    };
+  }
+
+  getUsageStats(): Record<string, { count: number; windowStart: number }> {
+    const now = Date.now();
+    const windowMs = this.config.windowSeconds * 1000;
+    const stats: Record<string, { count: number; windowStart: number }> = {};
+    for (const [key, timestamps] of this.windows) {
+      const valid = timestamps.filter(t => now - t < windowMs);
+      stats[key] = { count: valid.length, windowStart: valid[0] ?? now };
+    }
+    return stats;
+  }
+
+  reset(key?: string): void {
+    if (key) this.windows.delete(key);
+    else this.windows.clear();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: ContextAnalyzer — Multi-turn Context Tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ContextThreatResult {
+  contextScore: number;
+  escalationDetected: boolean;
+  pivotDetected: boolean;
+  chainOfConcern: string[];
+}
+
+export interface ConversationTurn {
+  role: string;
+  content: string;
+  threatScore: number;
+  toolName?: string;
+  timestamp: number;
+}
+
+const CA_BENIGN_TOPICS = ['weather', 'cooking', 'travel', 'sports', 'music', 'movies'];
+const CA_SENSITIVE_TOPICS = ['hacking', 'malware', 'weapons', 'exploits', 'bypass', 'jailbreak', 'injection', 'exfil'];
+const CA_MAX_TURNS = 20;
+
+export class ContextAnalyzer {
+  private sessions: Map<string, ConversationTurn[]> = new Map();
+
+  update(sessionId: string, role: string, content: string, threatScore = 0, toolName?: string): void {
+    if (!this.sessions.has(sessionId)) this.sessions.set(sessionId, []);
+    const turns = this.sessions.get(sessionId)!;
+    turns.push({ role, content, threatScore, toolName, timestamp: Date.now() });
+    if (turns.length > CA_MAX_TURNS) turns.splice(0, turns.length - CA_MAX_TURNS);
+  }
+
+  analyze(sessionId: string): ContextThreatResult {
+    const turns = this.sessions.get(sessionId) ?? [];
+    const chainOfConcern: string[] = [];
+
+    // Escalation: last 3 turns strictly increasing threatScores
+    let escalationDetected = false;
+    if (turns.length >= 3) {
+      const last3 = turns.slice(-3);
+      if (last3[0].threatScore < last3[1].threatScore && last3[1].threatScore < last3[2].threatScore) {
+        escalationDetected = true;
+        chainOfConcern.push(`Escalating threat scores: ${last3.map(t => t.threatScore).join(' → ')}`);
+      }
+    }
+
+    // Pivot detection
+    let pivotDetected = false;
+    const lower = turns.map(t => t.content.toLowerCase());
+    const hasBenign = lower.some(c => CA_BENIGN_TOPICS.some(topic => c.includes(topic)));
+    const hasSensitive = lower.some(c => CA_SENSITIVE_TOPICS.some(topic => c.includes(topic)));
+    if (hasBenign && hasSensitive) {
+      pivotDetected = true;
+      chainOfConcern.push('Topic pivot from benign to sensitive content detected');
+    }
+
+    // Context score
+    const avgScore = turns.length > 0 ? turns.reduce((a, b) => a + b.threatScore, 0) / turns.length : 0;
+    const escalationBonus = escalationDetected ? 20 : 0;
+    const pivotBonus = pivotDetected ? 15 : 0;
+    const contextScore = Math.min(100, avgScore + escalationBonus + pivotBonus);
+
+    return { contextScore: Math.round(contextScore), escalationDetected, pivotDetected, chainOfConcern };
+  }
+
+  clearSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
+  getSessionRisk(sessionId: string): number {
+    const result = this.analyze(sessionId);
+    return result.contextScore;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: MetricsCollector — Prometheus-compatible Metrics
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type MetricType = 'counter' | 'gauge' | 'histogram';
+
+export interface MetricValue {
+  name: string;
+  type: MetricType;
+  value: number;
+  help: string;
+  labels?: Record<string, string>;
+  sum?: number;
+  count?: number;
+  buckets?: Record<string, number>;
+}
+
+interface InternalMetric {
+  name: string;
+  type: MetricType;
+  help: string;
+  value: number;
+  labels: Record<string, string>;
+  // histogram state
+  sum: number;
+  count: number;
+  bucketDefs: number[];
+  buckets: Record<string, number>;
+}
+
+export class MetricsCollector {
+  private static _instance: MetricsCollector;
+  private metrics: Map<string, InternalMetric> = new Map();
+
+  private constructor() {
+    this.initDefaults();
+  }
+
+  static getInstance(): MetricsCollector {
+    if (!MetricsCollector._instance) MetricsCollector._instance = new MetricsCollector();
+    return MetricsCollector._instance;
+  }
+
+  private initDefaults(): void {
+    const counters: Array<[string, string]> = [
+      ['agentshield_threats_detected_total', 'Total threats detected'],
+      ['agentshield_events_processed_total', 'Total events processed'],
+      ['agentshield_blocks_total', 'Total blocks'],
+      ['agentshield_alerts_total', 'Total alerts'],
+    ];
+    for (const [name, help] of counters) {
+      this.metrics.set(name, { name, type: 'counter', help, value: 0, labels: {}, sum: 0, count: 0, bucketDefs: [], buckets: {} });
+    }
+    const gauges: Array<[string, string]> = [
+      ['agentshield_active_sessions', 'Active sessions'],
+      ['agentshield_threat_score', 'Current threat score'],
+    ];
+    for (const [name, help] of gauges) {
+      this.metrics.set(name, { name, type: 'gauge', help, value: 0, labels: {}, sum: 0, count: 0, bucketDefs: [], buckets: {} });
+    }
+    const histograms: Array<[string, string, number[]]> = [
+      ['agentshield_llm_latency_ms', 'LLM latency in milliseconds', [10, 50, 100, 500, 1000, 5000]],
+      ['agentshield_scan_duration_ms', 'Scan duration in milliseconds', [0.1, 1, 5, 10, 50]],
+    ];
+    for (const [name, help, bucketDefs] of histograms) {
+      const buckets: Record<string, number> = {};
+      for (const b of bucketDefs) buckets[String(b)] = 0;
+      buckets['+Inf'] = 0;
+      this.metrics.set(name, { name, type: 'histogram', help, value: 0, labels: {}, sum: 0, count: 0, bucketDefs, buckets });
+    }
+  }
+
+  private getKey(name: string, labels?: Record<string, string>): string {
+    if (!labels || Object.keys(labels).length === 0) return name;
+    const labelStr = Object.entries(labels).sort().map(([k, v]) => `${k}="${v}"`).join(',');
+    return `${name}{${labelStr}}`;
+  }
+
+  increment(name: string, value = 1, labels?: Record<string, string>): void {
+    const key = this.getKey(name, labels);
+    const base = this.metrics.get(name);
+    if (!this.metrics.has(key)) {
+      this.metrics.set(key, {
+        name, type: base?.type ?? 'counter', help: base?.help ?? name,
+        value: 0, labels: labels ?? {}, sum: 0, count: 0, bucketDefs: [], buckets: {},
+      });
+    }
+    const m = this.metrics.get(key)!;
+    m.value += value;
+  }
+
+  setGauge(name: string, value: number, labels?: Record<string, string>): void {
+    const key = this.getKey(name, labels);
+    const base = this.metrics.get(name);
+    if (!this.metrics.has(key)) {
+      this.metrics.set(key, {
+        name, type: 'gauge', help: base?.help ?? name,
+        value: 0, labels: labels ?? {}, sum: 0, count: 0, bucketDefs: [], buckets: {},
+      });
+    }
+    this.metrics.get(key)!.value = value;
+  }
+
+  observe(name: string, value: number, labels?: Record<string, string>): void {
+    const key = this.getKey(name, labels);
+    const base = this.metrics.get(name);
+    if (!this.metrics.has(key)) {
+      const bucketDefs = base?.bucketDefs ?? [];
+      const buckets: Record<string, number> = {};
+      for (const b of bucketDefs) buckets[String(b)] = 0;
+      buckets['+Inf'] = 0;
+      this.metrics.set(key, {
+        name, type: 'histogram', help: base?.help ?? name,
+        value: 0, labels: labels ?? {}, sum: 0, count: 0, bucketDefs, buckets,
+      });
+    }
+    const m = this.metrics.get(key)!;
+    m.sum += value;
+    m.count++;
+    for (const b of m.bucketDefs) {
+      if (value <= b) m.buckets[String(b)] = (m.buckets[String(b)] ?? 0) + 1;
+    }
+    m.buckets['+Inf'] = (m.buckets['+Inf'] ?? 0) + 1;
+  }
+
+  exportPrometheus(): string {
+    const lines: string[] = [];
+    const seen = new Set<string>();
+    for (const m of this.metrics.values()) {
+      if (!seen.has(m.name)) {
+        lines.push(`# HELP ${m.name} ${m.help}`);
+        lines.push(`# TYPE ${m.name} ${m.type}`);
+        seen.add(m.name);
+      }
+      const labelStr = Object.keys(m.labels).length > 0
+        ? '{' + Object.entries(m.labels).map(([k, v]) => `${k}="${v}"`).join(',') + '}'
+        : '';
+      if (m.type === 'histogram') {
+        for (const [le, count] of Object.entries(m.buckets)) {
+          lines.push(`${m.name}_bucket{le="${le}"${labelStr ? ',' + labelStr.slice(1) : ''}} ${count}`);
+        }
+        lines.push(`${m.name}_sum${labelStr} ${m.sum}`);
+        lines.push(`${m.name}_count${labelStr} ${m.count}`);
+      } else {
+        lines.push(`${m.name}${labelStr} ${m.value}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  exportJSON(): Record<string, MetricValue> {
+    const out: Record<string, MetricValue> = {};
+    for (const [key, m] of this.metrics) {
+      out[key] = {
+        name: m.name,
+        type: m.type,
+        value: m.value,
+        help: m.help,
+        labels: m.labels,
+        sum: m.sum,
+        count: m.count,
+        buckets: m.type === 'histogram' ? m.buckets : undefined,
+      };
+    }
+    return out;
+  }
+
+  reset(): void {
+    this.metrics.clear();
+    this.initDefaults();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: RealTimeFeed — Pub/Sub Threat Alert Feed
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+
+export interface ThreatAlertEvent {
+  alertId: string;
+  sessionId: string;
+  severity: AlertSeverity;
+  category: string;
+  message: string;
+  timestamp: number;
+  eventData: Record<string, unknown>;
+}
+
+export class RealTimeFeed {
+  private subscribers: Map<string, (alert: ThreatAlertEvent) => void> = new Map();
+  private history: ThreatAlertEvent[] = [];
+  private totalPublished = 0;
+  private bySeverity: Record<AlertSeverity, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  private static readonly MAX_HISTORY = 1000;
+
+  subscribe(callback: (alert: ThreatAlertEvent) => void): string {
+    const id = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    this.subscribers.set(id, callback);
+    return id;
+  }
+
+  unsubscribe(subscriptionId: string): boolean {
+    return this.subscribers.delete(subscriptionId);
+  }
+
+  publish(alert: ThreatAlertEvent): void {
+    this.history.push(alert);
+    if (this.history.length > RealTimeFeed.MAX_HISTORY) {
+      this.history.splice(0, this.history.length - RealTimeFeed.MAX_HISTORY);
+    }
+    this.totalPublished++;
+    this.bySeverity[alert.severity] = (this.bySeverity[alert.severity] ?? 0) + 1;
+    for (const cb of this.subscribers.values()) {
+      try { cb(alert); } catch { /* swallow subscriber errors */ }
+    }
+  }
+
+  getRecentAlerts(limit = 50): ThreatAlertEvent[] {
+    return this.history.slice(-Math.min(limit, RealTimeFeed.MAX_HISTORY));
+  }
+
+  getStats(): { totalPublished: number; activeSubscribers: number; bySeverity: Record<AlertSeverity, number> } {
+    return {
+      totalPublished: this.totalPublished,
+      activeSubscribers: this.subscribers.size,
+      bySeverity: { ...this.bySeverity },
+    };
+  }
+
+  createAlert(
+    sessionId: string,
+    severity: AlertSeverity,
+    category: string,
+    message: string,
+    eventData: Record<string, unknown> = {},
+  ): ThreatAlertEvent {
+    const alert: ThreatAlertEvent = {
+      alertId: Math.random().toString(36).substr(2, 9) + Date.now().toString(36),
+      sessionId,
+      severity,
+      category,
+      message,
+      timestamp: Date.now(),
+      eventData,
+    };
+    this.publish(alert);
+    return alert;
+  }
+}

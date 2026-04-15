@@ -7,6 +7,7 @@
 require 'base64'
 require 'digest'
 require 'securerandom'
+require 'set'
 require 'thread'
 require 'time'
 
@@ -829,12 +830,618 @@ module AgentFortress
   end
 
   # ---------------------------------------------------------------------------
+  # ChainGuard — Multi-Agent Chain Security
+  # ---------------------------------------------------------------------------
+  class ChainGuard
+    TRUST_LEVELS = { trusted: 0, verified: 1, unverified: 2, suspicious: 3, untrusted: 4 }.freeze
+
+    def initialize
+      @agents = {}
+      @messages = []
+      @secret = SecureRandom.hex(16)
+      @mutex = Mutex.new
+    end
+
+    def register_agent(agent_id, agent_name, trust_level: :unverified, capabilities: [], parent_id: nil)
+      @mutex.synchronize do
+        @agents[agent_id] = {
+          id: agent_id,
+          name: agent_name,
+          trust_level: trust_level,
+          capabilities: capabilities,
+          parent_id: parent_id,
+          created_at: Time.now.iso8601,
+          message_count: 0,
+          flagged: false,
+          flag_reason: nil
+        }
+      end
+      agent_id
+    end
+
+    def verify_agent(agent_id, verification_token)
+      expected = Digest::SHA256.hexdigest(agent_id + @secret)
+      if verification_token == expected
+        @mutex.synchronize do
+          agent = @agents[agent_id]
+          if agent && agent[:trust_level] == :unverified
+            agent[:trust_level] = :verified
+          end
+        end
+        true
+      else
+        false
+      end
+    end
+
+    def send_message(from_agent, to_agent, content)
+      @mutex.synchronize do
+        from = @agents[from_agent]
+        flagged = false
+        flag_reason = nil
+
+        if from.nil?
+          flagged = true
+          flag_reason = 'Unknown sender agent'
+        elsif from[:flagged]
+          flagged = true
+          flag_reason = "Sender flagged: #{from[:flag_reason]}"
+        end
+
+        from[:message_count] += 1 if from
+
+        msg = {
+          message_id: SecureRandom.uuid,
+          from_agent: from_agent,
+          to_agent: to_agent,
+          content_hash: Digest::SHA256.hexdigest(content.to_s),
+          timestamp: Time.now.iso8601,
+          trust_level: from ? from[:trust_level] : :untrusted,
+          flagged: flagged,
+          flag_reason: flag_reason
+        }
+        @messages << msg
+        msg
+      end
+    end
+
+    def check_privilege_escalation(from_agent, to_agent, requested_capability)
+      @mutex.synchronize do
+        from = @agents[from_agent]
+        to   = @agents[to_agent]
+        return false unless from && to
+
+        risky_levels = %i[unverified suspicious untrusted]
+        trusted_caps = (to[:capabilities] || [])
+
+        risky_levels.include?(from[:trust_level]) && trusted_caps.include?(requested_capability)
+      end
+    end
+
+    def get_chain(agent_id)
+      chain = []
+      @mutex.synchronize do
+        current = @agents[agent_id]
+        while current
+          chain.unshift(current.dup)
+          current = current[:parent_id] ? @agents[current[:parent_id]] : nil
+        end
+      end
+      chain
+    end
+
+    def get_trust_score(agent_id)
+      @mutex.synchronize do
+        agent = @agents[agent_id]
+        return 0 unless agent
+
+        base = case agent[:trust_level]
+               when :trusted    then 100
+               when :verified   then 80
+               when :unverified then 50
+               when :suspicious then 20
+               when :untrusted  then 0
+               else 0
+               end
+
+        score = base
+        score -= 30 if agent[:flagged]
+        score += [agent[:message_count] * 0.5, 10].min
+        [[score, 0].max, 100].min.round
+      end
+    end
+
+    def flag_agent(agent_id, reason)
+      @mutex.synchronize do
+        agent = @agents[agent_id]
+        return false unless agent
+
+        agent[:flagged] = true
+        agent[:flag_reason] = reason
+        agent[:trust_level] = :suspicious
+        true
+      end
+    end
+
+    def get_message_history(agent_id: nil, limit: 100)
+      @mutex.synchronize do
+        msgs = agent_id ? @messages.select { |m| m[:from_agent] == agent_id || m[:to_agent] == agent_id } : @messages.dup
+        msgs.last(limit)
+      end
+    end
+
+    private
+
+    def hash_content(content)
+      Digest::SHA256.hexdigest(content)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # BehavioralAnalyzer — Session behavioral fingerprinting
+  # ---------------------------------------------------------------------------
+  class BehavioralAnalyzer
+    def initialize
+      @profiles  = {}
+      @baselines = {}
+      @mutex = Mutex.new
+    end
+
+    def update_profile(session_id, prompt, tool_name: nil, is_error: false, timestamp: nil)
+      now = timestamp || Time.now.to_f
+      @mutex.synchronize do
+        p = @profiles[session_id] ||= {
+          tool_usage_freq: Hash.new(0),
+          prompt_lengths: [],
+          avg_prompt_length: 0.0,
+          vocab_set: Hash.new(0),
+          request_interval_avg: 0.0,
+          error_rate: 0.0,
+          sample_count: 0,
+          last_request_time: nil,
+          error_count: 0
+        }
+
+        p[:tool_usage_freq][tool_name] += 1 if tool_name
+        p[:prompt_lengths] << prompt.length
+        p[:error_count] += 1 if is_error
+        p[:sample_count] += 1
+
+        # Update avg prompt length
+        p[:avg_prompt_length] = p[:prompt_lengths].sum.to_f / p[:prompt_lengths].size
+
+        # Update vocab (top 50 words)
+        prompt.downcase.scan(/\b[a-z]{3,}\b/).each { |w| p[:vocab_set][w] += 1 }
+        if p[:vocab_set].size > 50
+          p[:vocab_set] = p[:vocab_set].sort_by { |_, v| -v }.first(50).to_h
+        end
+
+        # Update request interval
+        if p[:last_request_time]
+          interval = now - p[:last_request_time]
+          if p[:request_interval_avg] == 0.0
+            p[:request_interval_avg] = interval
+          else
+            p[:request_interval_avg] = (p[:request_interval_avg] * 0.8 + interval * 0.2)
+          end
+        end
+        p[:last_request_time] = now
+
+        # Update error rate
+        p[:error_rate] = p[:error_count].to_f / p[:sample_count]
+      end
+    end
+
+    def compare(session_id, prompt, tool_name: nil)
+      @mutex.synchronize do
+        baseline = @baselines[session_id]
+        current  = @profiles[session_id]
+        unless baseline && current
+          return { is_deviation: false, deviation_score: 0.0, signals_triggered: [], reason: 'No baseline established' }
+        end
+
+        signals = []
+
+        # Prompt length deviation
+        avg = baseline[:avg_prompt_length]
+        lengths = baseline[:prompt_lengths]
+        if lengths.size >= 2
+          variance = lengths.map { |l| (l - avg) ** 2 }.sum / lengths.size.to_f
+          std_dev = Math.sqrt(variance)
+          signals << :prompt_length if (prompt.length - avg).abs > 2 * std_dev
+        end
+
+        # Vocabulary overlap
+        b_vocab = Set.new(baseline[:vocab_set].keys)
+        c_vocab = Set.new(prompt.downcase.scan(/\b[a-z]{3,}\b/))
+        unless b_vocab.empty? || c_vocab.empty?
+          overlap = (b_vocab & c_vocab).size.to_f / [b_vocab.size, c_vocab.size].min
+          signals << :vocabulary_style if overlap < 0.10
+        end
+
+        # Tool preference
+        if tool_name && !baseline[:tool_usage_freq].key?(tool_name)
+          signals << :tool_preference
+        end
+
+        # Request timing
+        if current[:last_request_time] && current[:request_interval_avg] > 0 && baseline[:request_interval_avg] > 0
+          signals << :request_timing if current[:request_interval_avg] < baseline[:request_interval_avg] / 3.0
+        end
+
+        score = [signals.size * 0.25, 1.0].min
+        {
+          is_deviation: signals.any?,
+          deviation_score: score,
+          signals_triggered: signals,
+          reason: signals.empty? ? 'Behavior matches baseline' : "Deviation signals: #{signals.join(', ')}"
+        }
+      end
+    end
+
+    def establish_baseline(session_id)
+      @mutex.synchronize do
+        p = @profiles[session_id]
+        return false unless p && p[:sample_count] >= 5
+
+        @baselines[session_id] = {
+          tool_usage_freq: p[:tool_usage_freq].dup,
+          prompt_lengths: p[:prompt_lengths].dup,
+          avg_prompt_length: p[:avg_prompt_length],
+          vocab_set: p[:vocab_set].dup,
+          request_interval_avg: p[:request_interval_avg],
+          error_rate: p[:error_rate]
+        }
+        true
+      end
+    end
+
+    def reset_session(session_id)
+      @mutex.synchronize do
+        @profiles.delete(session_id)
+        @baselines.delete(session_id)
+      end
+    end
+
+    def get_fingerprint(session_id)
+      @mutex.synchronize { @profiles[session_id]&.dup }
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Explainer — Decision Explainability
+  # ---------------------------------------------------------------------------
+  class Explainer
+    MITIGATIONS = {
+      'prompt_injection'  => 'Sanitize inputs, use structured prompts, implement input validation',
+      'jailbreak'         => 'Strengthen system prompt, use content filtering, monitor for bypass attempts',
+      'role_manipulation' => 'Enforce strict persona boundaries, validate role context',
+      'pii_exfiltration'  => 'Enable PII scanning, redact sensitive data in outputs',
+      'data_exfiltration' => 'Restrict network access, monitor outbound data patterns',
+      'token_smuggling'   => 'Normalize inputs, strip special characters, validate encoding',
+      'encoding_attack'   => 'Decode and re-scan payloads, reject unusual encodings',
+    }.freeze
+
+    COMPLIANCE_NOTES = {
+      'GDPR'  => 'Personal data detected — review Article 5 (data minimization) and Article 25 (data protection by design)',
+      'HIPAA' => 'Potential PHI detected — ensure BAA compliance and audit logging per 45 CFR §164',
+      'SOC2'  => 'Security event logged — review CC6.1 (logical access controls) and CC7.2 (anomaly detection)',
+      'NIST'  => 'Threat detected — review NIST SP 800-53 SI-3 (malicious code protection) and SI-10 (input validation)',
+    }.freeze
+
+    def initialize; end
+
+    def explain(scan_result, session_id: '', level: :detailed)
+      action  = scan_result[:action] || 'allow'
+      score   = scan_result[:score]  || 0.0
+      threats = scan_result[:threats] || []
+      reason  = scan_result[:reason]  || ''
+
+      evidence    = threats.map { |t| "Threat detected: #{t}" }
+      mitigations = threats.flat_map { |t| [MITIGATIONS[t]].compact }.uniq
+
+      compliance_notes = []
+      if level == :compliance
+        pii_threats = %w[pii_ssn pii_exfiltration api_key_leak]
+        COMPLIANCE_NOTES.each do |fw, note|
+          compliance_notes << "#{fw}: #{note}" if threats.any? { |t| pii_threats.include?(t) } || score > 0.5
+        end
+      end
+
+      primary_reason = reason.empty? ? (action == 'allow' ? 'No threats detected' : "Threat score: #{score.round(2)}") : reason
+
+      {
+        decision:         action,
+        overall_score:    score,
+        primary_reason:   primary_reason,
+        evidence:         evidence,
+        mitigations:      mitigations,
+        compliance_notes: compliance_notes,
+        timestamp:        Time.now.iso8601,
+        session_id:       session_id
+      }
+    end
+
+    def to_markdown(explanation)
+      lines = [
+        "## Security Decision: #{explanation[:decision].upcase}",
+        "",
+        "**Score:** #{explanation[:overall_score].round(3)}  ",
+        "**Time:** #{explanation[:timestamp]}  ",
+        "**Session:** #{explanation[:session_id]}",
+        "",
+        "### Primary Reason",
+        explanation[:primary_reason],
+        ""
+      ]
+
+      unless explanation[:evidence].empty?
+        lines << "### Evidence"
+        explanation[:evidence].each { |e| lines << "- #{e}" }
+        lines << ""
+      end
+
+      unless explanation[:mitigations].empty?
+        lines << "### Recommended Mitigations"
+        explanation[:mitigations].each { |m| lines << "- #{m}" }
+        lines << ""
+      end
+
+      unless explanation[:compliance_notes].empty?
+        lines << "### Compliance Notes"
+        explanation[:compliance_notes].each { |n| lines << "- #{n}" }
+        lines << ""
+      end
+
+      lines.join("\n")
+    end
+
+    def generate_compliance_report(explanations, framework: 'SOC2')
+      note = COMPLIANCE_NOTES[framework] || "No specific note for #{framework}"
+      blocked = explanations.count { |e| e[:decision] == 'block' }
+      alerted = explanations.count { |e| e[:decision] == 'alert' }
+      total   = explanations.size
+
+      lines = [
+        "# Compliance Report — #{framework}",
+        "",
+        "**Framework Note:** #{note}",
+        "",
+        "## Summary",
+        "- Total events: #{total}",
+        "- Blocked: #{blocked}",
+        "- Alerted: #{alerted}",
+        "- Clean: #{total - blocked - alerted}",
+        "",
+        "## Event Details"
+      ]
+
+      explanations.each_with_index do |e, i|
+        lines << "### Event #{i + 1}: #{e[:decision].upcase} (score=#{e[:overall_score].round(3)})"
+        lines << "- **Reason:** #{e[:primary_reason]}"
+        lines << "- **Time:** #{e[:timestamp]}"
+        lines << "" unless e[:mitigations].empty?
+        e[:mitigations].each { |m| lines << "  - Mitigation: #{m}" }
+        lines << ""
+      end
+
+      lines.join("\n")
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # MetricsCollector — Prometheus-compatible Metrics
+  # ---------------------------------------------------------------------------
+  class MetricsCollector
+    PREDEFINED = {
+      'agentshield_threats_detected_total' => { type: :counter,   help: 'Total threats detected' },
+      'agentshield_events_processed_total' => { type: :counter,   help: 'Total events processed' },
+      'agentshield_blocks_total'           => { type: :counter,   help: 'Total blocked events' },
+      'agentshield_alerts_total'           => { type: :counter,   help: 'Total alert events' },
+      'agentshield_active_sessions'        => { type: :gauge,     help: 'Currently active sessions' },
+      'agentshield_threat_score'           => { type: :gauge,     help: 'Current threat score' },
+      'agentshield_llm_latency_ms'         => { type: :histogram, help: 'LLM call latency in ms',  buckets: [10, 50, 100, 500, 1000, 5000] },
+      'agentshield_scan_duration_ms'       => { type: :histogram, help: 'Scan duration in ms',     buckets: [0.1, 1, 5, 10, 50] },
+    }.freeze
+
+    @@instance = nil
+
+    def self.instance
+      @@instance ||= new
+    end
+
+    def initialize
+      @metrics = {}
+      @mutex = Mutex.new
+      PREDEFINED.each { |name, meta| init_metric(name, meta) }
+    end
+
+    def increment(name, value: 1, labels: {})
+      @mutex.synchronize do
+        init_metric(name, { type: :counter, help: '' }) unless @metrics[name]
+        m = @metrics[name]
+        key = label_key(labels)
+        m[:values][key] = (m[:values][key] || 0) + value
+      end
+    end
+
+    def set_gauge(name, value, labels: {})
+      @mutex.synchronize do
+        init_metric(name, { type: :gauge, help: '' }) unless @metrics[name]
+        m = @metrics[name]
+        m[:values][label_key(labels)] = value
+      end
+    end
+
+    def observe(name, value, labels: {})
+      @mutex.synchronize do
+        m = @metrics[name]
+        return unless m && m[:type] == :histogram
+
+        key = label_key(labels)
+        m[:observations][key] ||= []
+        m[:observations][key] << value
+
+        m[:buckets].each do |b|
+          bucket_key = "#{key}|le=#{b}"
+          m[:bucket_counts][bucket_key] ||= 0
+          m[:bucket_counts][bucket_key] += 1 if value <= b
+        end
+        inf_key = "#{key}|le=+Inf"
+        m[:bucket_counts][inf_key] = (m[:bucket_counts][inf_key] || 0) + 1
+      end
+    end
+
+    def export_prometheus
+      lines = []
+      @mutex.synchronize do
+        @metrics.each do |name, m|
+          lines << "# HELP #{name} #{m[:help]}"
+          lines << "# TYPE #{name} #{m[:type]}"
+
+          case m[:type]
+          when :counter, :gauge
+            m[:values].each do |label_key, val|
+              label_str = label_key.empty? ? '' : "{#{label_key}}"
+              lines << "#{name}#{label_str} #{val}"
+            end
+          when :histogram
+            m[:observations].each do |label_key, obs|
+              sum   = obs.sum
+              count = obs.size
+              prefix = label_key.empty? ? '' : "{#{label_key}}"
+
+              m[:buckets].each do |b|
+                bk = "#{label_key}|le=#{b}"
+                cnt = m[:bucket_counts][bk] || 0
+                lines << "#{name}_bucket{le=\"#{b}\"#{label_key.empty? ? '' : ', ' + label_key}} #{cnt}"
+              end
+              lines << "#{name}_bucket{le=\"+Inf\"#{label_key.empty? ? '' : ', ' + label_key}} #{count}"
+              lines << "#{name}_sum#{prefix} #{sum}"
+              lines << "#{name}_count#{prefix} #{count}"
+            end
+          end
+        end
+      end
+      lines.join("\n")
+    end
+
+    def export_json
+      @mutex.synchronize do
+        @metrics.transform_values do |m|
+          base = { type: m[:type], help: m[:help] }
+          case m[:type]
+          when :counter, :gauge
+            base[:values] = m[:values].dup
+          when :histogram
+            base[:observations] = m[:observations].transform_values { |obs| { count: obs.size, sum: obs.sum } }
+          end
+          base
+        end
+      end
+    end
+
+    def reset
+      @mutex.synchronize do
+        @metrics.clear
+        PREDEFINED.each { |name, meta| init_metric(name, meta) }
+      end
+    end
+
+    private
+
+    def init_metric(name, meta)
+      @metrics[name] = { type: meta[:type], help: meta[:help] || '', values: {} }
+      if meta[:type] == :histogram
+        @metrics[name][:buckets]       = meta[:buckets] || [0.1, 1, 5, 10, 50, 100]
+        @metrics[name][:observations]  = {}
+        @metrics[name][:bucket_counts] = {}
+      end
+    end
+
+    def label_key(labels)
+      return '' if labels.nil? || labels.empty?
+      labels.map { |k, v| "#{k}=\"#{v}\"" }.join(',')
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # RealTimeFeed — Pub/Sub Alert Feed
+  # ---------------------------------------------------------------------------
+  class RealTimeFeed
+    MAX_HISTORY = 1000
+
+    def initialize
+      @subscribers    = {}
+      @history        = []
+      @stats          = Hash.new(0)
+      @total_published = 0
+      @mutex = Mutex.new
+    end
+
+    def subscribe(&callback)
+      sub_id = SecureRandom.uuid
+      @mutex.synchronize { @subscribers[sub_id] = callback }
+      sub_id
+    end
+
+    def unsubscribe(subscription_id)
+      @mutex.synchronize { @subscribers.delete(subscription_id) }
+    end
+
+    def publish(alert)
+      subs = nil
+      @mutex.synchronize do
+        @history << alert
+        @history.shift if @history.size > MAX_HISTORY
+        @stats[alert[:severity]] += 1
+        @total_published += 1
+        subs = @subscribers.values.dup
+      end
+
+      subs.each do |cb|
+        Thread.new { cb.call(alert) rescue nil }
+      end
+
+      alert
+    end
+
+    def get_recent_alerts(limit: 50)
+      @mutex.synchronize { @history.last(limit) }
+    end
+
+    def get_stats
+      @mutex.synchronize do
+        {
+          total_published:    @total_published,
+          active_subscribers: @subscribers.size,
+          by_severity:        @stats.dup
+        }
+      end
+    end
+
+    def create_alert(session_id, severity, category, message, event_data: {})
+      {
+        alert_id:   SecureRandom.uuid,
+        session_id: session_id,
+        severity:   severity,
+        category:   category,
+        message:    message,
+        timestamp:  Time.now.iso8601,
+        event_data: event_data
+      }
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # AgentFortress — Main facade class
   # ---------------------------------------------------------------------------
   class AgentFortress
     VERSION = '3.0.0'
 
-    attr_reader :guardian, :vault, :threat_intel, :rate_limiter, :redactor, :context_analyzer
+    attr_reader :guardian, :vault, :threat_intel, :rate_limiter, :redactor,
+                :context_analyzer, :chain_guard, :behavioral_analyzer,
+                :explainer, :metrics, :realtime_feed
 
     # @param config [Hash] api_key:, server_url:, mode:, block_threshold:, alert_threshold:
     def initialize(config = {})
@@ -846,13 +1453,18 @@ module AgentFortress
         alert_threshold: 0.35
       }.merge(config)
 
-      @scanner          = AdvancedScanner.new
-      @guardian         = Guardian.new
-      @vault            = Vault.new
-      @threat_intel     = ThreatIntelDB.new
-      @rate_limiter     = RateLimiter.new
-      @redactor         = Redactor.new
-      @context_analyzer = ContextAnalyzer.new
+      @scanner             = AdvancedScanner.new
+      @guardian            = Guardian.new
+      @vault               = Vault.new
+      @threat_intel        = ThreatIntelDB.new
+      @rate_limiter        = RateLimiter.new
+      @redactor            = Redactor.new
+      @context_analyzer    = ContextAnalyzer.new
+      @chain_guard         = ChainGuard.new
+      @behavioral_analyzer = BehavioralAnalyzer.new
+      @explainer           = Explainer.new
+      @metrics             = MetricsCollector.instance
+      @realtime_feed       = RealTimeFeed.new
     end
 
     # Scan and protect input — raises BlockedError if blocked
