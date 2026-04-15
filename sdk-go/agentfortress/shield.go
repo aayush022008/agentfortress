@@ -12,7 +12,7 @@ import (
 )
 
 // VERSION is the current SDK version
-const VERSION = "2.0.0"
+const VERSION = "3.0.0"
 
 // Config holds configuration for AgentFortress
 type Config struct {

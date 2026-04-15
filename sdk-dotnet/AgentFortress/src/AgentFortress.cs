@@ -278,9 +278,12 @@ namespace AgentFortress
 
     // ─── Main Shield ────────────────────────────────────────────────────────────
 
-    /// <summary>AgentFortress v2.0.0 — Runtime protection for AI agents.</summary>
+    /// <summary>AgentFortress v3.0.0 — Runtime protection for AI agents.</summary>
     public class AgentFortressShield
     {
+        /// <summary>Library version.</summary>
+        public const string Version = "3.0.0";
+
         private readonly AgentFortressConfig _config;
         private readonly AdvancedScanner _scanner;
         private readonly string _sessionId;
@@ -289,12 +292,31 @@ namespace AgentFortress
         private readonly object _stateLock = new();
         private SessionState _state = new();
 
+        /// <summary>Autonomous threat response engine.</summary>
+        public Guardian Guardian { get; }
+        /// <summary>Encrypted secrets manager.</summary>
+        public Vault Vault { get; }
+        /// <summary>Threat intelligence IOC database.</summary>
+        public ThreatIntelDB ThreatIntel { get; }
+        /// <summary>Behavioral deviation analyzer.</summary>
+        public BehavioralAnalyzer BehavioralAnalyzer { get; }
+        /// <summary>Decision explainer and compliance reporter.</summary>
+        public Explainer Explainer { get; }
+
         public AgentFortressShield(AgentFortressConfig? config = null)
         {
             _config = config ?? new AgentFortressConfig();
             _scanner = new AdvancedScanner(_config.BlockThreshold, _config.AlertThreshold);
             _sessionId = $"session-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Guid.NewGuid().ToString()[..8]}";
+            Guardian = new Guardian();
+            Vault = new Vault();
+            ThreatIntel = new ThreatIntelDB();
+            BehavioralAnalyzer = new BehavioralAnalyzer();
+            Explainer = new Explainer();
         }
+
+        /// <summary>Run the built-in self-test suite.</summary>
+        public SelfTestReport SelfTest() => new SelfTester().RunAll();
 
         // ── Public API ────────────────────────────────────────────────────────
 

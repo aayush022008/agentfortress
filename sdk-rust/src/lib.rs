@@ -20,11 +20,17 @@ use std::collections::VecDeque;
 pub mod scanner;
 pub mod models;
 pub mod policies;
+pub mod guardian;
+pub mod vault;
+pub mod threatintel;
 
 pub use scanner::Scanner;
 pub use models::{ThreatEvent, PolicyAction, ThreatSeverity, PolicyActionKind, AuditRecord};
+pub use guardian::{Guardian, ResponseAction, ThreatLevel, PlaybookRule, ResponseRecord, SessionStatus};
+pub use vault::{Vault, SecretEntry, VaultToken};
+pub use threatintel::{ThreatIntelDB, IOC, IOCType, IOCMatch};
 
-pub const VERSION: &str = "2.0.0";
+pub const VERSION: &str = "3.0.0";
 
 /// Configuration for AgentFortress
 #[derive(Debug, Clone)]

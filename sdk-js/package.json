@@ -1,6 +1,6 @@
 {
   "name": "agentfortress",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Runtime protection and security monitoring for AI agents — The CrowdStrike for AI Agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
